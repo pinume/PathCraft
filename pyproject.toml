@@ -1,0 +1,21 @@
+[project]
+name = "pathcraft"
+version = "1.1.0"
+description = "A safe cross-platform CLI for file renaming, mapping tables, and invoice PDF conversion"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "openpyxl>=3.1.5",
+    "pymupdf>=1.27.2.3",
+]
+
+[tool.uv]
+package = true
+link-mode = "copy"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pathcraft"]
