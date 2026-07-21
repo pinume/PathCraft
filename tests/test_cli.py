@@ -8,12 +8,11 @@ from unittest.mock import patch
 
 from pathcraft.cli import (
     InteractiveConfig,
-    _LAST_OPERATION_WORKSPACE,
+    OperationResult,
     _find_scoped_files,
     _print_status_message,
     _run_pdf2png,
     _run_rename_plan,
-    _set_operation_workspace,
     main,
 )
 from pathcraft.config import DEFAULT_PDF_DPI
@@ -57,14 +56,14 @@ class CliTests(unittest.TestCase):
             )
 
             with redirect_stdout(output):
-                status = _run_rename_plan(config, plan)
+                result = _run_rename_plan(config, plan)
 
-            self.assertEqual(status, 0)
+            self.assertEqual(result.exit_code, 0)
             self.assertIn("处理文件 1/1", output.getvalue())
             self.assertNotIn("预览", output.getvalue())
             self.assertEqual(
-                _LAST_OPERATION_WORKSPACE[:4],
-                ["处理结果", "成功：1 个", "跳过：0 个", "失败：0 个"],
+                result.workspace[:4],
+                ("处理结果", "成功：1 个", "跳过：0 个", "失败：0 个"),
             )
 
     def test_command_line_arguments_are_rejected(self) -> None:
@@ -91,7 +90,7 @@ class CliTests(unittest.TestCase):
             output = StringIO()
 
             with (
-                patch("pathcraft.cli._choose_directory", return_value=root),
+                patch("pathcraft.cli.choose_directory", return_value=root),
                 patch("builtins.input", side_effect=answers),
                 redirect_stdout(output),
             ):
@@ -110,7 +109,7 @@ class CliTests(unittest.TestCase):
             answers = ["2", "1", "new-", "q"]
 
             with (
-                patch("pathcraft.cli._choose_directory", return_value=root),
+                patch("pathcraft.cli.choose_directory", return_value=root),
                 patch("builtins.input", side_effect=answers),
             ):
                 status = main([])
@@ -124,9 +123,12 @@ class CliTests(unittest.TestCase):
             answers = ["1", "q"]
 
             with (
-                patch("pathcraft.cli._choose_directory", return_value=root),
+                patch("pathcraft.cli.choose_directory", return_value=root),
                 patch("builtins.input", side_effect=answers),
-                patch("pathcraft.cli._run_pdf2png", return_value=0) as run_pdf2png,
+                patch(
+                    "pathcraft.cli._run_pdf2png",
+                    return_value=OperationResult(0, ()),
+                ) as run_pdf2png,
             ):
                 status = main([])
 
@@ -155,21 +157,21 @@ class CliTests(unittest.TestCase):
                 ) as execute,
                 redirect_stdout(output),
             ):
-                status = _run_pdf2png(config)
+                result = _run_pdf2png(config)
 
-            self.assertEqual(status, 0)
+            self.assertEqual(result.exit_code, 0)
             self.assertEqual(execute.call_args.kwargs["dpi"], DEFAULT_PDF_DPI)
             self.assertNotIn("PDF 已移至", output.getvalue())
             self.assertNotIn(source.name, output.getvalue())
             self.assertIn("成功 1 个 PDF", output.getvalue())
             self.assertEqual(
-                _LAST_OPERATION_WORKSPACE[:4],
-                [
+                result.workspace[:4],
+                (
                     "处理结果",
                     "成功 PDF：1 个",
                     "生成 PNG：1 张",
                     "失败：0 个",
-                ],
+                ),
             )
 
     def test_scan_includes_current_and_all_nested_directories(self) -> None:
@@ -202,7 +204,10 @@ class CliTests(unittest.TestCase):
                 "pathcraft.cli._interactive_configuration",
                 side_effect=[config, config, ExitProgram],
             ),
-            patch("pathcraft.cli._dispatch", side_effect=[1, 0]),
+            patch(
+                "pathcraft.cli._dispatch",
+                side_effect=[OperationResult(1, ()), OperationResult(0, ())],
+            ),
         ):
             status = main([])
 
@@ -211,9 +216,8 @@ class CliTests(unittest.TestCase):
     def test_interactive_main_menu_keeps_last_operation_result(self) -> None:
         config = InteractiveConfig(Path.cwd(), "pdf2png")
 
-        def dispatch(_config: InteractiveConfig) -> int:
-            _set_operation_workspace(["处理结果", "成功 PDF：2 个"])
-            return 0
+        def dispatch(_config: InteractiveConfig) -> OperationResult:
+            return OperationResult(0, ("处理结果", "成功 PDF：2 个"))
 
         with (
             patch(

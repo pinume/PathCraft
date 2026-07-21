@@ -17,10 +17,6 @@ class ReturnToMainMenu(PathCraftError):
     """用户要求立即返回主菜单。"""
 
 
-class PreviousStep(PathCraftError):
-    """用户要求返回当前流程的上一步。"""
-
-
 class PdfError(PathCraftError):
     """PDF 处理错误基类。"""
 

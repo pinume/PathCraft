@@ -10,7 +10,7 @@ PathCraft is a secure, cross-platform file processing CLI that supports batch re
 - Remove or replace specified content in filenames
 - Batch rename based on an Excel, CSV, or TXT mapping table
 - By default processes all non-hidden file types within the selected directory scope
-- Recursively processes the selected directory and all non-hidden subdirectories, with preview, conflict detection, two-phase renaming, failure rollback, and progress feedback for large batches
+- Recursively processes the selected directory and all non-hidden subdirectories, with conflict detection, two-phase renaming, failure rollback, and progress feedback for large batches
 
 ### PDF to PNG
 
@@ -25,10 +25,11 @@ PathCraft is a secure, cross-platform file processing CLI that supports batch re
 ## Requirements
 
 - Python 3.10 or higher
-- Supports Windows, macOS, and Linux
+- Supports Windows and Linux
 - Batch rename uses only the Python standard library
 - PDF conversion uses PyMuPDF
 - Excel mapping table reading uses openpyxl
+- Terminal text width calculation uses wcwidth
 
 ## Installation
 
@@ -59,10 +60,22 @@ uv run python -m pathcraft
 
 The interactive menu uses an unboxed ASCII header, a `➤` marker for the current
 selection, and keyboard navigation with Up/Down, Enter, Q, and Esc.
+Windows and Linux use the same text-editor state model in the workspace. Arrow
+keys move the cursor, Home/End jump to either end, Backspace/Delete edit around
+the cursor, and completed prompts scroll upward when the workspace is full.
 
 ### Rename via Mapping Table
 
 After selecting "Batch rename via mapping table" from the interactive menu, choose an `.xlsx`, `.xlsm`, `.csv`, or `.txt` file. The program will display the detected column headers, and you'll select the original-name column and new-name column through the menu — no need to type column headers manually.
+On Ubuntu, PathCraft uses the available system file picker and falls back to an
+arrow-key terminal file picker when no graphical picker is available, so the file
+path normally does not need to be typed manually. If manual entry is still
+required, the path is edited inside the main workspace with cursor-key support;
+validation errors remain above the next input line.
+The selected mapping file, detected headers, and completed column choice remain in
+the main workspace while the next choice appears below. When the workspace is
+full, older completed lines and long column lists scroll while keeping the current
+selection visible.
 
 Example mapping table:
 
@@ -101,9 +114,23 @@ uv sync
 uv run python -W error -m unittest discover -v
 ```
 
-GitHub Actions runs the same checks on Windows, macOS, and Linux. The workflow
+GitHub Actions runs the same checks on Windows and Linux. The workflow
 also covers Python 3.10, 3.12, and 3.14, compiles the source tree, checks the
 installed dependency set, and builds both distributions.
+
+PDF batches continue after an individual file fails. To print the full traceback
+for those isolated failures, enable diagnostic mode before starting PathCraft:
+
+```shell
+PATHCRAFT_DEBUG=1 uv run python -m pathcraft
+```
+
+In Windows PowerShell:
+
+```powershell
+$env:PATHCRAFT_DEBUG = "1"
+uv run python -m pathcraft
+```
 
 Project structure:
 
@@ -116,7 +143,10 @@ src/
     ├── __main__.py
     ├── cli.py
     ├── config.py
+    ├── diagnostics.py
+    ├── dialogs.py
     ├── exceptions.py
+    ├── filesystem.py
     ├── mapping_rename.py
     ├── main.py
     ├── pdf/
@@ -128,16 +158,21 @@ src/
     ├── rename.py
     ├── rules.py
     ├── scanner.py
+    ├── terminal_editor.py
+    ├── terminal_layout.py
+    ├── terminal_menu.py
     └── utils.py
 tests/
 ├── test_cli.py
 ├── test_config.py
+├── test_diagnostics.py
 ├── test_entrypoints.py
 ├── test_exceptions.py
 ├── test_mapping_rename.py
 ├── test_pdf_convert.py
 ├── test_pdf_extract.py
 ├── test_pdf_render.py
+├── test_prompts.py
 ├── test_rename.py
 ├── test_rules.py
 ├── test_scanner.py

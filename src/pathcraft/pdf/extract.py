@@ -15,6 +15,7 @@ from ..exceptions import (
     EncryptedPdfError,
     PdfDependencyError,
 )
+from ..diagnostics import report_exception
 from ..scanner import find_files, is_hidden_within
 from ..utils import WINDOWS_RESERVED_NAMES
 
@@ -36,7 +37,7 @@ class PdfConversionPlan:
 
 def load_pymupdf() -> ModuleType:
     try:
-        # PyMuPDF 1.28.0 的 SWIG 扩展在部分 Python/macOS 组合下会在
+        # PyMuPDF 1.28.0 的 SWIG 扩展在部分 Python/系统组合下会在
         # DeprecationWarning 被提升为异常时崩溃。只屏蔽这组上游导入警告，
         # 让应用和测试仍可对其余警告使用 ``-W error``。
         with warnings.catch_warnings():
@@ -169,5 +170,6 @@ def build_conversion_plans(
                 archive = _available_archive_path(source, reserved_archives)
             plans.append(PdfConversionPlan(source, buyer_name, outputs, archive))
         except Exception as error:
+            report_exception("PDF 规划失败", source, error)
             failed.append((source, str(error)))
     return plans, failed

@@ -41,8 +41,6 @@ def invalid_filename_characters(system: str | None = None) -> set[str]:
     current_system = system or platform.system()
     if current_system == "Windows":
         return set('<>:"/\\|?*\0')
-    if current_system == "Darwin":
-        return {":", "/", "\0"}
     return {"/", "\0"}
 
 

@@ -1,11 +1,11 @@
 from collections import defaultdict, deque
 from collections.abc import Callable
 from dataclasses import dataclass
-import errno
 import os
 from pathlib import Path
 import uuid
 
+from .filesystem import move_without_overwrite, path_exists
 from .rules import RenameRule
 from .utils import filename_validation_error
 
@@ -25,10 +25,6 @@ class RenameResult:
 
 def _path_key(path: Path) -> str:
     return os.path.normcase(str(path.absolute()))
-
-
-def _path_exists(path: Path) -> bool:
-    return os.path.lexists(path)
 
 
 def build_plan(files: list[Path], rule: RenameRule) -> list[RenameEntry]:
@@ -67,7 +63,7 @@ def mark_existing_destination_conflicts(
     blocked = set()
 
     for index, entry in enumerate(plan):
-        if entry.problem is not None or not _path_exists(entry.destination):
+        if entry.problem is not None or not path_exists(entry.destination):
             continue
         owner = moving_sources.get(_path_key(entry.destination))
         if owner is None:
@@ -104,7 +100,7 @@ def execute_plan(
     for entry in executable:
         temporary = _temporary_path(entry.source.parent)
         try:
-            _move_without_overwrite(entry.source, temporary)
+            move_without_overwrite(entry.source, temporary)
         except OSError as error:
             failed.append((entry, f"暂存失败：{error}"))
             rollback_failed, _ = _rollback(staged, set())
@@ -114,9 +110,9 @@ def execute_plan(
     committed: set[int] = set()
     for entry, temporary in staged:
         try:
-            if _path_exists(entry.destination):
+            if path_exists(entry.destination):
                 raise FileExistsError("目标文件在执行前已存在")
-            _move_without_overwrite(temporary, entry.destination)
+            move_without_overwrite(temporary, entry.destination)
         except OSError as error:
             failed.append((entry, f"写入目标失败：{error}"))
             rollback_failed, remaining = _rollback(staged, committed)
@@ -148,38 +144,8 @@ def _notify_progress(
 def _temporary_path(parent: Path) -> Path:
     while True:
         candidate = parent / f".pathcraft-{uuid.uuid4().hex}.tmp"
-        if not _path_exists(candidate):
+        if not path_exists(candidate):
             return candidate
-
-
-def _move_without_overwrite(source: Path, destination: Path) -> None:
-    if os.name == "nt":
-        source.rename(destination)
-        return
-
-    if source.is_symlink():
-        os.symlink(os.readlink(source), destination)
-    else:
-        try:
-            os.link(source, destination)
-        except OSError as error:
-            unsupported = {errno.EPERM, errno.ENOSYS, errno.EOPNOTSUPP}
-            if error.errno not in unsupported:
-                raise
-            if _path_exists(destination):
-                raise FileExistsError(f"目标文件已存在：{destination}")
-            source.rename(destination)
-            return
-    try:
-        source.unlink()
-    except OSError as unlink_error:
-        try:
-            destination.unlink()
-        except OSError as cleanup_error:
-            raise OSError(
-                f"无法删除源文件（{unlink_error}），也无法清理目标文件（{cleanup_error}）"
-            ) from unlink_error
-        raise
 
 
 def _rollback(
@@ -193,9 +159,9 @@ def _rollback(
         was_committed = id(entry) in committed
         current = entry.destination if was_committed else temporary
         try:
-            if _path_exists(entry.source):
+            if path_exists(entry.source):
                 raise FileExistsError("原文件名在回滚前已被占用")
-            _move_without_overwrite(current, entry.source)
+            move_without_overwrite(current, entry.source)
         except OSError as error:
             failed.append((entry, f"回滚失败（文件保留在 {current}）：{error}"))
             if was_committed:

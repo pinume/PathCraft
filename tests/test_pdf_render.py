@@ -75,13 +75,15 @@ class PdfRenderTests(unittest.TestCase):
             plans, _ = build_conversion_plans(root, pymupdf_module=planning_module)
             failing_module = FakePyMuPDF([FakePage(), FakePage(fail_render=True)])
 
-            result = execute_conversion_plans(
-                plans,
-                300,
-                pymupdf_module=failing_module,
-            )
+            with patch("pathcraft.pdf.render.report_exception") as report:
+                result = execute_conversion_plans(
+                    plans,
+                    300,
+                    pymupdf_module=failing_module,
+                )
 
             self.assertEqual(len(result.failed), 1)
+            report.assert_called_once()
             self.assertTrue(source.exists())
             self.assertFalse(list(root.rglob("*.png")))
             self.assertFalse((root / ".pdf").exists())
@@ -115,7 +117,7 @@ class PdfRenderTests(unittest.TestCase):
             source.touch()
             module = FakePyMuPDF()
             plans, _ = build_conversion_plans(root, pymupdf_module=module)
-            move_without_overwrite = render._move_without_overwrite
+            move_without_overwrite = render.move_without_overwrite
 
             def fail_archive_move(current: Path, destination: Path) -> None:
                 if destination.parent.name == ".pdf":
@@ -123,7 +125,7 @@ class PdfRenderTests(unittest.TestCase):
                 move_without_overwrite(current, destination)
 
             with patch(
-                "pathcraft.pdf.render._move_without_overwrite",
+                "pathcraft.pdf.render.move_without_overwrite",
                 side_effect=fail_archive_move,
             ):
                 result = execute_conversion_plans(

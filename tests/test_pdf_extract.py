@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from pathcraft.exceptions import BuyerNameRecognitionError
 from pathcraft.pdf.extract import (
@@ -94,10 +95,11 @@ class PdfExtractTests(unittest.TestCase):
             for name in ("empty.pdf", "encrypted.pdf", "valid.pdf"):
                 (root / name).touch()
 
-            plans, failures = build_conversion_plans(
-                root,
-                pymupdf_module=PlanningModule(),
-            )
+            with patch("pathcraft.pdf.extract.report_exception") as report:
+                plans, failures = build_conversion_plans(
+                    root,
+                    pymupdf_module=PlanningModule(),
+                )
 
             self.assertEqual([plan.source.name for plan in plans], ["valid.pdf"])
             self.assertEqual(
@@ -107,6 +109,7 @@ class PdfExtractTests(unittest.TestCase):
                     ("encrypted.pdf", "PDF 已加密，需要密码"),
                 ],
             )
+            self.assertEqual(report.call_count, 2)
 
 if __name__ == "__main__":
     unittest.main()

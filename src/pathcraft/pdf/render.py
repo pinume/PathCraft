@@ -10,8 +10,9 @@ from typing import Any
 import uuid
 
 from ..config import MINIMUM_PDF_DPI
+from ..diagnostics import report_exception
 from ..exceptions import EncryptedPdfError, PdfPageCountChangedError, PdfRenderError
-from ..rename import _move_without_overwrite
+from ..filesystem import move_without_overwrite
 from .extract import PdfConversionPlan, load_pymupdf
 
 
@@ -80,9 +81,9 @@ def convert_pdf_plan(
                     on_page_progress(page_number, document.page_count, plan.source)
 
         for temporary, output in zip(temporary_outputs, plan.outputs):
-            _move_without_overwrite(temporary, output)
+            move_without_overwrite(temporary, output)
             committed_outputs.append(output)
-        _move_without_overwrite(plan.source, archive)
+        move_without_overwrite(plan.source, archive)
 
     except Exception:
         for path in reversed(temporary_outputs):
@@ -118,5 +119,6 @@ def execute_conversion_plans(
             )
             completed.append(plan)
         except Exception as error:
+            report_exception("PDF 转换失败", plan.source, error)
             failed.append((plan.source, str(error)))
     return PdfConversionResult(completed, failed)

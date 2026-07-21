@@ -41,7 +41,6 @@ class PlatformTests(unittest.TestCase):
 
     def test_platform_specific_invalid_characters(self) -> None:
         self.assertEqual(validate_filename_text("a:b?c", "Windows"), [":", "?"])
-        self.assertEqual(validate_filename_text("a:b/c", "Darwin"), ["/", ":"])
         self.assertEqual(validate_filename_text("a:b/c", "Linux"), ["/"])
 
     def test_windows_reserved_and_trailing_names_are_rejected(self) -> None:

@@ -56,7 +56,7 @@ class RenameTests(unittest.TestCase):
             first.touch()
             second.touch()
             plan = build_plan([first, second], RenameRule(prefix="new-"))
-            original_move = rename_module._move_without_overwrite
+            original_move = rename_module.move_without_overwrite
             calls = 0
 
             def fail_second_commit(source: Path, destination: Path) -> None:
@@ -66,7 +66,7 @@ class RenameTests(unittest.TestCase):
                     raise OSError("simulated failure")
                 original_move(source, destination)
 
-            with patch.object(rename_module, "_move_without_overwrite", fail_second_commit):
+            with patch.object(rename_module, "move_without_overwrite", fail_second_commit):
                 result = execute_plan(plan)
 
             self.assertTrue(result.failed)
