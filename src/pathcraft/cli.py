@@ -476,7 +476,7 @@ def main(argv: list[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
     try:
         if arguments:
-            print("不再支持命令行参数，请直接运行：uv run main.py", file=sys.stderr)
+            print("不再支持命令行参数，请直接运行：pathcraft", file=sys.stderr)
             return 2
         return _run_interactive()
     except (UserCancelled, EOFError, KeyboardInterrupt):

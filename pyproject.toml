@@ -10,6 +10,9 @@ dependencies = [
     "wcwidth>=0.8.2",
 ]
 
+[project.scripts]
+pathcraft = "pathcraft.cli:main"
+
 [tool.uv]
 package = true
 link-mode = "copy"

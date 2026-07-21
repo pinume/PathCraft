@@ -77,7 +77,7 @@ class CliTests(unittest.TestCase):
                 status = main([str(root), "--prefix", "new-"])
 
             self.assertEqual(status, 2)
-            self.assertIn("请直接运行：uv run main.py", errors.getvalue())
+            self.assertIn("请直接运行：pathcraft", errors.getvalue())
             self.assertTrue(source.exists())
             self.assertFalse((root / "new-photo.jpg").exists())
 

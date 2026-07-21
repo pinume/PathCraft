@@ -47,6 +47,12 @@ jobs:
       - name: Check installed dependencies
         run: uv pip check
 
+      - name: Install PathCraft command
+        run: uv tool install .
+
+      - name: Verify PathCraft command
+        run: uv run python -c "import subprocess; result = subprocess.run(['uv', 'tool', 'run', 'pathcraft'], input='q\n', text=True, check=False); raise SystemExit(result.returncode)"
+
       - name: Build distributions
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         run: uv build
