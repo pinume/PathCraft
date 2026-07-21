@@ -90,7 +90,8 @@ class PromptMenuTests(unittest.TestCase):
             self.assertIn("--file-filter=映射文件 | *.xlsx *.xlsm *.csv *.txt", command)
 
     def test_mapping_file_falls_back_to_terminal_picker_before_text_input(self) -> None:
-        selected = Path.cwd() / "mapping.csv"
+        root = Path.cwd()
+        selected = root / "mapping.csv"
 
         with (
             patch("pathcraft.dialogs.os.name", "posix"),
@@ -109,10 +110,10 @@ class PromptMenuTests(unittest.TestCase):
             ) as terminal_picker,
             patch("pathcraft.dialogs.ask") as ask,
         ):
-            chosen = choose_mapping_file(Path.cwd())
+            chosen = choose_mapping_file(root)
 
         self.assertEqual(chosen, selected)
-        terminal_picker.assert_called_once_with(Path.cwd())
+        terminal_picker.assert_called_once_with(root)
         ask.assert_not_called()
 
     def test_manual_mapping_path_reader_receives_errors_for_workspace_display(self) -> None:
