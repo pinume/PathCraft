@@ -1,6 +1,5 @@
 # PathCraft
 
-## 安装与使用
 
 ### Ubuntu 安装
 
