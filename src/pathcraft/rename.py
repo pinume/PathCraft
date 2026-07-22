@@ -5,7 +5,13 @@ import os
 from pathlib import Path
 import uuid
 
-from .filesystem import move_without_overwrite, path_exists
+from .filesystem import (
+    FileSignature,
+    file_matches_signature,
+    file_signature,
+    move_without_overwrite,
+    path_exists,
+)
 from .rules import RenameRule
 from .utils import filename_validation_error
 
@@ -15,6 +21,7 @@ class RenameEntry:
     source: Path
     destination: Path
     problem: str | None = None
+    source_signature: FileSignature | None = None
 
 
 @dataclass
@@ -37,6 +44,7 @@ def build_plan(files: list[Path], rule: RenameRule) -> list[RenameEntry]:
     plan = []
     for source, destination in zip(files, destinations):
         problem = None
+        signature = None
         if rule.remove is not None and not source.stem.replace(rule.remove, ""):
             problem = "删除后文件名为空"
         elif source == destination:
@@ -45,7 +53,12 @@ def build_plan(files: list[Path], rule: RenameRule) -> list[RenameEntry]:
             problem = "目标名称重复"
         else:
             problem = filename_validation_error(destination.name)
-        plan.append(RenameEntry(source, destination, problem))
+        try:
+            signature = file_signature(source)
+        except OSError as error:
+            if problem is None:
+                problem = f"无法读取源文件：{error}"
+        plan.append(RenameEntry(source, destination, problem, signature))
 
     return mark_existing_destination_conflicts(plan)
 
@@ -80,7 +93,7 @@ def mark_existing_destination_conflicts(
                 queue.append(dependent)
 
     return [
-        RenameEntry(entry.source, entry.destination, problem)
+        RenameEntry(entry.source, entry.destination, problem, entry.source_signature)
         if index in blocked
         else entry
         for index, entry in enumerate(plan)
@@ -98,6 +111,13 @@ def execute_plan(
     progress = 0
 
     for entry in executable:
+        if (
+            entry.source_signature is not None
+            and not file_matches_signature(entry.source, entry.source_signature)
+        ):
+            failed.append((entry, "源文件在预览后发生变化，请重新生成预览"))
+            rollback_failed, _ = _rollback(staged, set())
+            return RenameResult([], failed + rollback_failed)
         temporary = _temporary_path(entry.source.parent)
         try:
             move_without_overwrite(entry.source, temporary)

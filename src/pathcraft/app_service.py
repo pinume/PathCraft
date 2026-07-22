@@ -20,6 +20,12 @@ from .pdf import (
 from .rename import RenameEntry, build_plan, execute_plan
 from .rules import RenameRule
 from .scanner import find_files
+from .undo import (
+    UndoOperation,
+    execute_undo,
+    prepare_pdf_undo,
+    prepare_rename_undo,
+)
 
 
 ProgressCallback = Callable[[int, int, str], None]
@@ -49,6 +55,7 @@ class ExecutionSummary:
     skipped: int
     failed: int
     details: tuple[str, ...] = ()
+    undo: UndoOperation | None = None
 
 
 def validate_root(root: Path) -> Path:
@@ -62,12 +69,12 @@ def validate_root(root: Path) -> Path:
 
 def list_current_files(root: Path) -> tuple[Path, ...]:
     resolved = validate_root(root)
-    return tuple(find_files(resolved, recursive=True, all_files=True))
+    return tuple(find_files(resolved, recursive=True))
 
 
 def prepare_rule_rename(root: Path, rule: RenameRule) -> PreparedOperation:
     resolved = validate_root(root)
-    entries = build_plan(find_files(resolved, recursive=True, all_files=True), rule)
+    entries = build_plan(find_files(resolved, recursive=True), rule)
     return _prepared_rename(resolved, entries)
 
 
@@ -123,6 +130,25 @@ def execute_operation(
     raise ValueError(f"未知操作类型：{prepared.kind}")
 
 
+def execute_undo_operation(
+    operation: UndoOperation,
+    *,
+    on_progress: ProgressCallback | None = None,
+) -> ExecutionSummary:
+    def report(index: int, total: int, path: Path) -> None:
+        if on_progress is not None:
+            on_progress(index, total, str(path))
+
+    result = execute_undo(operation, on_progress=report)
+    return ExecutionSummary(
+        result.succeeded,
+        result.skipped,
+        result.failed,
+        result.details,
+        result.remaining,
+    )
+
+
 def _prepared_rename(root: Path, entries: list[RenameEntry]) -> PreparedOperation:
     rows = tuple(
         PreviewEntry(
@@ -156,11 +182,14 @@ def _execute_rename(
         f"{entry.source.name} -> {entry.destination.name}：{message}"
         for entry, message in result.failed
     )
+    undo, undo_details = prepare_rename_undo(prepared.root, result.completed)
+    details.extend(undo_details)
     return ExecutionSummary(
         succeeded=len(result.completed),
         skipped=len(blocked),
         failed=len(result.failed),
         details=tuple(details),
+        undo=undo,
     )
 
 
@@ -177,16 +206,18 @@ def _execute_pdf(
         list(prepared.pdf_plans),
         dpi=dpi,
         on_progress=report,
-        on_page_progress=report,
     )
     details = [
         f"{source.name}：{message}"
         for source, message in prepared.planning_failures
     ]
     details.extend(f"{source.name}：{message}" for source, message in result.failed)
+    undo, undo_details = prepare_pdf_undo(prepared.root, result.completed)
+    details.extend(undo_details)
     return ExecutionSummary(
         succeeded=len(result.completed),
         skipped=len(prepared.planning_failures),
         failed=len(result.failed),
         details=tuple(details),
+        undo=undo,
     )

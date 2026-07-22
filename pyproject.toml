@@ -1,16 +1,17 @@
 [project]
 name = "pathcraft"
-version = "1.1.0"
+version = "1.2.0"
 description = "A safe Windows desktop app for file renaming, mapping tables, and invoice PDF conversion"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "openpyxl>=3.1.5",
     "pymupdf>=1.27.2.3",
+    "pywebview==6.2.1",
 ]
 
 [project.gui-scripts]
-pathcraft = "pathcraft.windows_app:main"
+pathcraft = "pathcraft.desktop_bridge:main"
 
 [dependency-groups]
 build = [

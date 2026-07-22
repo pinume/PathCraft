@@ -3,8 +3,6 @@ import re
 from collections.abc import Iterator
 from pathlib import Path
 
-from .config import IMAGE_EXTENSIONS
-
 
 def is_hidden(path: Path) -> bool:
     if path.name.startswith("."):
@@ -38,41 +36,43 @@ def is_hidden_within(path: Path, root: Path) -> bool:
 def find_files(
     root: Path,
     recursive: bool = True,
-    all_files: bool = True,
 ) -> list[Path]:
+    return sorted(
+        iter_files(root, recursive=recursive),
+        key=lambda path: _natural_sort_key(path.relative_to(root)),
+    )
+
+
+def iter_files(root: Path, recursive: bool = True) -> Iterator[Path]:
+    """Yield visible files without sorting or retaining the full directory tree."""
     if is_hidden(root):
-        return []
-    if recursive:
-        candidates = _walk_files(root)
-        files = (
-            path
-            for path in candidates
-            if path.is_file()
-            and (all_files or path.suffix.lower() in IMAGE_EXTENSIONS)
-        )
-    else:
-        candidates = root.iterdir()
-        files = (
-            path
-            for path in candidates
-            if path.is_file()
-            and not is_hidden(path)
-            and (all_files or path.suffix.lower() in IMAGE_EXTENSIONS)
-        )
-    return sorted(files, key=lambda path: _natural_sort_key(path.relative_to(root)))
+        return
+    pending = [root]
+    while pending:
+        directory = pending.pop()
+        try:
+            with os.scandir(directory) as entries:
+                for entry in entries:
+                    try:
+                        if _entry_is_hidden(entry):
+                            continue
+                        if entry.is_dir(follow_symlinks=False):
+                            if recursive:
+                                pending.append(Path(entry.path))
+                        elif entry.is_file():
+                            yield Path(entry.path)
+                    except OSError:
+                        continue
+        except OSError:
+            if directory == root and not recursive:
+                raise
 
 
-def _walk_files(root: Path) -> Iterator[Path]:
-    for directory, directories, filenames in os.walk(root):
-        parent = Path(directory)
-        directories[:] = [
-            name for name in directories if not is_hidden(parent / name)
-        ]
-        yield from (
-            parent / name
-            for name in filenames
-            if not is_hidden(parent / name)
-        )
+def _entry_is_hidden(entry: os.DirEntry[str]) -> bool:
+    if entry.name.startswith("."):
+        return True
+    status = entry.stat(follow_symlinks=False)
+    return bool(getattr(status, "st_file_attributes", 0) & 0x2)
 
 
 def _natural_sort_key(path: Path) -> tuple[tuple[int, object], ...]:
@@ -81,7 +81,3 @@ def _natural_sort_key(path: Path) -> tuple[tuple[int, object], ...]:
         (1, int(part)) if part.isdigit() else (0, part)
         for part in parts
     )
-
-
-def find_images(root: Path, recursive: bool = True) -> list[Path]:
-    return find_files(root, recursive, all_files=False)

@@ -1,7 +1,7 @@
 from importlib.metadata import entry_points
 import unittest
 
-from pathcraft.windows_app import main
+from pathcraft.desktop_bridge import main
 
 
 class EntrypointTests(unittest.TestCase):
@@ -9,7 +9,7 @@ class EntrypointTests(unittest.TestCase):
         gui_scripts = entry_points(group="gui_scripts")
         entry = next(script for script in gui_scripts if script.name == "pathcraft")
 
-        self.assertEqual(entry.value, "pathcraft.windows_app:main")
+        self.assertEqual(entry.value, "pathcraft.desktop_bridge:main")
         self.assertIs(entry.load(), main)
 
     def test_no_pathcraft_console_entry_is_published(self) -> None:

@@ -12,7 +12,7 @@ import uuid
 from ..config import MINIMUM_PDF_DPI
 from ..diagnostics import report_exception
 from ..exceptions import EncryptedPdfError, PdfPageCountChangedError, PdfRenderError
-from ..filesystem import move_without_overwrite
+from ..filesystem import file_matches_signature, move_without_overwrite
 from .extract import PdfConversionPlan, load_pymupdf
 
 
@@ -35,6 +35,11 @@ def convert_pdf_plan(
     """事务式执行单个 PDF 计划，失败时清理由本次操作生成的文件。"""
     if dpi < MINIMUM_PDF_DPI:
         raise ValueError(f"DPI 不能低于 {MINIMUM_PDF_DPI}")
+    if (
+        plan.source_signature is not None
+        and not file_matches_signature(plan.source, plan.source_signature)
+    ):
+        raise ValueError("PDF 在预览后发生变化，请重新生成预览")
     pymupdf = pymupdf_module or load_pymupdf()
     temporary_outputs: list[Path] = []
     committed_outputs: list[Path] = []
@@ -108,8 +113,6 @@ def execute_conversion_plans(
     completed = []
     failed = []
     for index, plan in enumerate(plans, start=1):
-        if on_progress is not None:
-            on_progress(index, len(plans), plan.source)
         try:
             convert_pdf_plan(
                 plan,
@@ -118,6 +121,8 @@ def execute_conversion_plans(
                 on_page_progress,
             )
             completed.append(plan)
+            if on_progress is not None:
+                on_progress(index, len(plans), plan.source)
         except Exception as error:
             report_exception("PDF 转换失败", plan.source, error)
             failed.append((plan.source, str(error)))

@@ -16,6 +16,7 @@ from ..exceptions import (
     PdfDependencyError,
 )
 from ..diagnostics import report_exception
+from ..filesystem import FileSignature, file_signature
 from ..scanner import find_files, is_hidden_within
 from ..utils import WINDOWS_RESERVED_NAMES
 
@@ -33,6 +34,7 @@ class PdfConversionPlan:
     buyer_name: str
     outputs: tuple[Path, ...]
     archive: Path | None = None
+    source_signature: FileSignature | None = None
 
 
 def load_pymupdf() -> ModuleType:
@@ -56,7 +58,7 @@ def load_pymupdf() -> ModuleType:
 
 def find_pdf_files(root: Path, recursive: bool = True) -> list[Path]:
     """查找 PDF，扩展名匹配不区分大小写。"""
-    candidates = find_files(root, recursive=recursive, all_files=True)
+    candidates = find_files(root, recursive=recursive)
     files = (
         path
         for path in candidates
@@ -155,6 +157,7 @@ def build_conversion_plans(
     for source in pdf_files:
         output_directory = source.parent
         try:
+            signature_before = file_signature(source)
             with pymupdf.open(source) as document:
                 if document.needs_pass:
                     raise EncryptedPdfError("PDF 已加密，需要密码")
@@ -168,7 +171,12 @@ def build_conversion_plans(
                     reserved_outputs,
                 )
                 archive = _available_archive_path(source, reserved_archives)
-            plans.append(PdfConversionPlan(source, buyer_name, outputs, archive))
+            signature_after = file_signature(source)
+            if signature_before != signature_after:
+                raise ValueError("PDF 在生成预览期间发生变化，请重新生成预览")
+            plans.append(
+                PdfConversionPlan(source, buyer_name, outputs, archive, signature_after)
+            )
         except Exception as error:
             report_exception("PDF 规划失败", source, error)
             failed.append((source, str(error)))

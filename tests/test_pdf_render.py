@@ -66,6 +66,25 @@ class PdfRenderTests(unittest.TestCase):
             self.assertEqual(file_progress, [(1, 2, first), (2, 2, second)])
             self.assertEqual(page_progress, [(1, 1, first), (1, 1, second)])
 
+    def test_file_progress_is_reported_only_after_a_pdf_succeeds(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "invoice.pdf"
+            source.touch()
+            planning_module = FakePyMuPDF()
+            plans, _ = build_conversion_plans(root, pymupdf_module=planning_module)
+            progress = []
+
+            result = execute_conversion_plans(
+                plans,
+                300,
+                pymupdf_module=FakePyMuPDF([FakePage(fail_render=True)]),
+                on_progress=lambda index, total, path: progress.append((index, total, path)),
+            )
+
+            self.assertTrue(result.failed)
+            self.assertEqual(progress, [])
+
     def test_render_failure_cleans_outputs_and_keeps_source(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -86,6 +105,23 @@ class PdfRenderTests(unittest.TestCase):
             report.assert_called_once()
             self.assertTrue(source.exists())
             self.assertFalse(list(root.rglob("*.png")))
+            self.assertFalse((root / ".pdf").exists())
+
+    def test_source_changed_after_preview_is_not_converted(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "invoice.pdf"
+            source.touch()
+            module = FakePyMuPDF()
+            plans, _ = build_conversion_plans(root, pymupdf_module=module)
+
+            source.write_bytes(b"replacement content")
+            result = execute_conversion_plans(plans, 300, pymupdf_module=module)
+
+            self.assertEqual(len(result.failed), 1)
+            self.assertIn("预览后发生变化", result.failed[0][1])
+            self.assertTrue(source.exists())
+            self.assertFalse(list(root.glob("*.png")))
             self.assertFalse((root / ".pdf").exists())
 
     def test_render_failure_raises_domain_error(self) -> None:

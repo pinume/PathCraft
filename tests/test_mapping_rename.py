@@ -1,10 +1,12 @@
+import csv
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import openpyxl
 
-from pathcraft.mapping_rename import build_mapping_plan, load_mapping_table
+from pathcraft.mapping_rename import _detect_dialect, build_mapping_plan, load_mapping_table
 from pathcraft.rename import execute_plan
 
 
@@ -33,6 +35,15 @@ class MappingTableTests(unittest.TestCase):
             table = load_mapping_table(source)
 
             self.assertEqual(table.mappings("旧值", "新值"), [("a.jpg", "b.jpg")])
+
+    def test_dialect_fallback_uses_the_delimiter_present_in_short_text(self) -> None:
+        with patch(
+            "pathcraft.mapping_rename.csv.Sniffer.sniff",
+            side_effect=csv.Error,
+        ):
+            dialect = _detect_dialect("旧值;新值", ".txt")
+
+        self.assertEqual(dialect.delimiter, ";")
 
     def test_excel_is_supported(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -94,7 +105,7 @@ class MappingRenameTests(unittest.TestCase):
             self.assertIsNone(plan[0].problem)
             self.assertEqual(plan[0].source, visible)
 
-    def test_plan_honors_recursion_and_file_type_options(self) -> None:
+    def test_plan_honors_recursion_option(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             image = root / "photo.jpg"
@@ -108,13 +119,12 @@ class MappingRenameTests(unittest.TestCase):
 
             plan = build_mapping_plan(
                 root,
-                [("photo", "renamed"), ("notes", "ignored"), ("nested", "ignored")],
+                [("photo", "renamed"), ("notes", "notes-new"), ("nested", "ignored")],
                 recursive=False,
-                all_files=False,
             )
 
             self.assertIsNone(plan[0].problem)
-            self.assertEqual(plan[1].problem, "未找到原文件")
+            self.assertIsNone(plan[1].problem)
             self.assertEqual(plan[2].problem, "未找到原文件")
 
 if __name__ == "__main__":

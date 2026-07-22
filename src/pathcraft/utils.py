@@ -9,7 +9,7 @@ WINDOWS_RESERVED_NAMES = {
 
 
 def invalid_filename_characters() -> set[str]:
-    return set('<>:"/\\|?*\0')
+    return set('<>:"/\\|?*') | {chr(codepoint) for codepoint in range(32)}
 
 
 def validate_filename_text(text: str) -> list[str]:

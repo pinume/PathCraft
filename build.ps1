@@ -8,6 +8,8 @@ $projectDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
 $output = Join-Path $projectDirectory "dist\PathCraft.exe"
 $icon = Join-Path $projectDirectory "assets\pathcraft.ico"
 $iconData = "$icon;assets"
+$ui = Join-Path $projectDirectory "assets\ui"
+$uiData = "$ui;assets\ui"
 
 Push-Location $projectDirectory
 try {
@@ -19,6 +21,8 @@ try {
         --name PathCraft `
         --icon $icon `
         --add-data $iconData `
+        --add-data $uiData `
+        --hidden-import webview `
         --paths src `
         --exclude-module numpy `
         --exclude-module pandas `

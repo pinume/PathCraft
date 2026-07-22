@@ -21,10 +21,10 @@ class PortableBuildTests(unittest.TestCase):
         for module in ("numpy", "pandas", "PIL", "lxml", "fontTools"):
             self.assertIn(f"--exclude-module {module}", script)
 
-    def test_launcher_starts_windows_app_directly(self) -> None:
+    def test_launcher_starts_pywebview_app_directly(self) -> None:
         launcher = (ROOT / "packaging" / "pathcraft_portable.pyw").read_text(encoding="utf-8")
 
-        self.assertIn("from pathcraft.windows_app import main", launcher)
+        self.assertIn("from pathcraft.desktop_bridge import main", launcher)
         self.assertNotIn("pathcraft.cli", launcher)
 
     def test_pyinstaller_is_an_isolated_build_dependency(self) -> None:
@@ -33,6 +33,49 @@ class PortableBuildTests(unittest.TestCase):
         self.assertIn("[dependency-groups]", project)
         self.assertIn('pyinstaller>=6.21,<7', project.lower())
         self.assertNotIn("wcwidth", project.lower())
+
+    def test_pywebview_assets_and_dependency_are_packaged(self) -> None:
+        script = (ROOT / "build.ps1").read_text(encoding="utf-8")
+        project = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+
+        self.assertIn('"assets\\ui"', script)
+        self.assertIn("--add-data $uiData", script)
+        self.assertIn("--hidden-import webview", script)
+        self.assertIn('"pywebview==6.2.1"', project.lower())
+
+    def test_local_ui_has_no_network_font_dependency(self) -> None:
+        ui = ROOT / "assets" / "ui"
+        html = (ui / "index.html").read_text(encoding="utf-8")
+        style = (ui / "style.css").read_text(encoding="utf-8")
+        script = (ui / "app.js").read_text(encoding="utf-8")
+
+        self.assertTrue((ui / "index.html").is_file())
+        self.assertTrue((ui / "style.css").is_file())
+        self.assertTrue((ui / "app.js").is_file())
+        self.assertNotIn("fonts.googleapis.com", style)
+        self.assertIn("[hidden] { display: none !important; }", style)
+        self.assertIn("pywebview-drag-region", html)
+        self.assertIn('id="minimizeWindow"', html)
+        self.assertIn('id="maximizeWindow"', html)
+        self.assertIn('id="closeWindow"', html)
+        self.assertIn('id="progressTrack"', html)
+        self.assertIn('id="emptyPreviewButton"', html)
+        self.assertIn('id="resultSearch"', html)
+        self.assertIn('id="statusFilter"', html)
+        self.assertIn('id="dropOverlay"', html)
+        self.assertIn("toggle_maximize_window", script)
+        self.assertIn('primary || "final_"', script)
+        self.assertIn("console.warn", script)
+        self.assertIn('event.key === "Enter"', script)
+        self.assertIn("appendDestinationDiff", script)
+        self.assertIn("markProcessedThrough", script)
+        self.assertIn('id="tableScroll"', html)
+        self.assertIn("renderVirtualRows", script)
+        self.assertIn("VIRTUAL_OVERSCAN", script)
+        self.assertIn(".virtual-spacer", style)
+        self.assertIn(".text-diff-add", style)
+        self.assertIn("max-width: 1080px", style)
+        self.assertIn("stroke-width: 2", style)
 
     def test_installer_is_not_part_of_portable_delivery(self) -> None:
         self.assertFalse((ROOT / "install.ps1").exists())

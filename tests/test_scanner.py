@@ -1,29 +1,22 @@
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
-from pathcraft.scanner import find_files, find_images, is_hidden
+from pathcraft.scanner import _entry_is_hidden, find_files, is_hidden
 
 
 class ScannerTests(unittest.TestCase):
     def test_dot_prefixed_paths_are_hidden(self) -> None:
         self.assertTrue(is_hidden(Path(".hidden")))
 
-    def test_scanner_filters_images_and_honors_recursion(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            (root / "one.JPG").touch()
-            (root / "notes.txt").touch()
-            nested = root / "nested"
-            nested.mkdir()
-            (nested / "two.heic").touch()
+    def test_dir_entry_hidden_attribute_is_reused(self) -> None:
+        entry = Mock()
+        entry.name = "hidden.txt"
+        entry.stat.return_value.st_file_attributes = 0x2
 
-            self.assertEqual(find_images(root, recursive=False), [root / "one.JPG"])
-            self.assertEqual(
-                find_images(root, recursive=True),
-                [nested / "two.heic", root / "one.JPG"],
-            )
+        self.assertTrue(_entry_is_hidden(entry))
+        entry.stat.assert_called_once_with(follow_symlinks=False)
 
     def test_scanner_uses_natural_sorting(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -34,9 +27,9 @@ class ScannerTests(unittest.TestCase):
             for path in (ten, two, one):
                 path.touch()
 
-            self.assertEqual(find_images(root), [one, two, ten])
+            self.assertEqual(find_files(root), [one, two, ten])
 
-    def test_all_files_scanner_honors_recursion(self) -> None:
+    def test_scanner_honors_recursion(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             image = root / "one.jpg"
@@ -48,11 +41,11 @@ class ScannerTests(unittest.TestCase):
             data = nested / "data.csv"
             data.touch()
             self.assertEqual(
-                find_files(root, recursive=False, all_files=True),
+                find_files(root, recursive=False),
                 [text, image],
             )
             self.assertEqual(
-                find_files(root, recursive=True, all_files=True),
+                find_files(root, recursive=True),
                 [data, text, image],
             )
 
@@ -67,11 +60,11 @@ class ScannerTests(unittest.TestCase):
             (hidden_directory / "nested.txt").touch()
 
             self.assertEqual(
-                find_files(root, recursive=True, all_files=True),
+                find_files(root, recursive=True),
                 [visible],
             )
             self.assertEqual(
-                find_files(hidden_directory, recursive=True, all_files=True),
+                find_files(hidden_directory, recursive=True),
                 [],
             )
 
@@ -87,7 +80,7 @@ class ScannerTests(unittest.TestCase):
                 "pathcraft.scanner.is_hidden_within",
                 side_effect=AssertionError("recursive walk already filtered hidden paths"),
             ):
-                files = find_files(root, recursive=True, all_files=True)
+                files = find_files(root, recursive=True)
 
             self.assertEqual(files, [visible])
 

@@ -19,6 +19,3 @@ venv/
 .idea/
 .DS_Store
 Thumbs.db
-
-# RenameX operation history
-.renamex/

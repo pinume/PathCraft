@@ -1,6 +1,6 @@
 """PyInstaller entry point for the portable Windows application."""
 
-from pathcraft.windows_app import main
+from pathcraft.desktop_bridge import main
 
 
 if __name__ == "__main__":
