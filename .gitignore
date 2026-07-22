@@ -6,6 +6,9 @@ __pycache__/
 .coverage
 htmlcov/
 dist/
+build/
+*.egg-info/
+*.tmp
 
 # Virtual environments
 .venv/

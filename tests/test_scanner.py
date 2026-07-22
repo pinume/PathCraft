@@ -1,20 +1,14 @@
 import tempfile
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import patch
 
 from pathcraft.scanner import find_files, find_images, is_hidden
 
 
 class ScannerTests(unittest.TestCase):
-    def test_hidden_check_tolerates_stat_without_st_flags(self) -> None:
-        stat_result = SimpleNamespace()
-        with (
-            patch("pathcraft.scanner.stat.UF_HIDDEN", 32768, create=True),
-            patch.object(Path, "stat", return_value=stat_result),
-        ):
-            self.assertFalse(is_hidden(Path("visible")))
+    def test_dot_prefixed_paths_are_hidden(self) -> None:
+        self.assertTrue(is_hidden(Path(".hidden")))
 
     def test_scanner_filters_images_and_honors_recursion(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -80,6 +74,22 @@ class ScannerTests(unittest.TestCase):
                 find_files(hidden_directory, recursive=True, all_files=True),
                 [],
             )
+
+    def test_recursive_walk_does_not_recheck_each_file_ancestor_chain(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            nested = root / "nested"
+            nested.mkdir()
+            visible = nested / "visible.txt"
+            visible.touch()
+
+            with patch(
+                "pathcraft.scanner.is_hidden_within",
+                side_effect=AssertionError("recursive walk already filtered hidden paths"),
+            ):
+                files = find_files(root, recursive=True, all_files=True)
+
+            self.assertEqual(files, [visible])
 
 
 if __name__ == "__main__":

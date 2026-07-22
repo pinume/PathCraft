@@ -64,6 +64,7 @@ def convert_pdf_plan(
                 if output.exists():
                     raise FileExistsError(f"目标文件在执行前已存在：{output}")
                 temporary = _temporary_output(output)
+                temporary_outputs.append(temporary)
                 try:
                     pixmap = page.get_pixmap(
                         dpi=dpi,
@@ -76,7 +77,6 @@ def convert_pdf_plan(
                     raise PdfRenderError(
                         f"PDF 第 {page_number} 页渲染失败：{error}"
                     ) from error
-                temporary_outputs.append(temporary)
                 if on_page_progress is not None:
                     on_page_progress(page_number, document.page_count, plan.source)
 

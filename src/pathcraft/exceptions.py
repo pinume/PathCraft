@@ -5,18 +5,6 @@ class PathCraftError(Exception):
     """PathCraft 可识别的应用错误基类。"""
 
 
-class UserCancelled(PathCraftError):
-    """用户主动取消当前操作。"""
-
-
-class ExitProgram(PathCraftError):
-    """用户要求退出整个交互程序。"""
-
-
-class ReturnToMainMenu(PathCraftError):
-    """用户要求立即返回主菜单。"""
-
-
 class PdfError(PathCraftError):
     """PDF 处理错误基类。"""
 

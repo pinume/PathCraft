@@ -1,44 +1,21 @@
 from importlib.metadata import entry_points
-import subprocess
-import sys
 import unittest
 
-from pathcraft.cli import main
+from pathcraft.windows_app import main
 
 
 class EntrypointTests(unittest.TestCase):
-    def test_installed_console_command_forwards_to_cli(self) -> None:
-        scripts = entry_points(group="console_scripts")
-        entry = next(script for script in scripts if script.name == "pathcraft")
+    def test_installed_application_uses_windows_gui_entry(self) -> None:
+        gui_scripts = entry_points(group="gui_scripts")
+        entry = next(script for script in gui_scripts if script.name == "pathcraft")
 
-        self.assertEqual(entry.value, "pathcraft.cli:main")
+        self.assertEqual(entry.value, "pathcraft.windows_app:main")
         self.assertIs(entry.load(), main)
 
-    def test_package_module_forwards_to_cli(self) -> None:
-        result = subprocess.run(
-            [sys.executable, "-m", "pathcraft", "unexpected"],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            check=False,
-        )
+    def test_no_pathcraft_console_entry_is_published(self) -> None:
+        console_scripts = entry_points(group="console_scripts")
 
-        self.assertEqual(result.returncode, 2)
-        self.assertIn("不再支持命令行参数", result.stderr)
-        self.assertIn("pathcraft", result.stderr)
-
-    def test_legacy_main_module_still_forwards_to_cli(self) -> None:
-        result = subprocess.run(
-            [sys.executable, "-m", "pathcraft.main", "unexpected"],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            check=False,
-        )
-
-        self.assertEqual(result.returncode, 2)
-        self.assertIn("不再支持命令行参数", result.stderr)
-        self.assertIn("pathcraft", result.stderr)
+        self.assertFalse(any(script.name == "pathcraft" for script in console_scripts))
 
 
 if __name__ == "__main__":

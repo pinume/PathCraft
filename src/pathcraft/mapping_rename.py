@@ -50,15 +50,42 @@ def load_mapping_table(path: Path) -> MappingTable:
     return _load_text_table(path)
 
 
+def load_mapping_columns(path: Path) -> tuple[str, ...]:
+    suffix = path.suffix.lower()
+    if suffix not in SUPPORTED_MAPPING_EXTENSIONS:
+        supported = "、".join(sorted(SUPPORTED_MAPPING_EXTENSIONS))
+        raise ValueError(f"不支持的映射文件格式：{suffix}（支持 {supported}）")
+    if suffix in {".xlsx", ".xlsm"}:
+        return _load_excel_columns(path)
+    return _load_text_columns(path)
+
+
+def _load_text_columns(path: Path) -> tuple[str, ...]:
+    errors = []
+    for encoding in ("utf-8-sig", "gb18030"):
+        try:
+            with path.open("r", encoding=encoding, newline="") as stream:
+                sample = stream.read(8192)
+                if not sample.strip():
+                    raise ValueError("映射文件为空")
+                stream.seek(0)
+                dialect = _detect_dialect(sample, path.suffix.lower())
+                header = next(csv.reader(stream, dialect), None)
+        except UnicodeDecodeError as error:
+            errors.append(error)
+            continue
+        if header is None:
+            raise ValueError("映射文件为空")
+        return _columns_from_values(header)
+    raise ValueError(f"无法识别映射文件编码：{errors[-1]}")
+
+
 def _load_text_table(path: Path) -> MappingTable:
     text = _read_text(path)
     if not text.strip():
         raise ValueError("映射文件为空")
     sample = text[:8192]
-    try:
-        dialect = csv.Sniffer().sniff(sample, delimiters=",\t;|")
-    except csv.Error:
-        dialect = csv.excel_tab if path.suffix.lower() == ".txt" else csv.excel
+    dialect = _detect_dialect(sample, path.suffix.lower())
     reader = csv.reader(text.splitlines(), dialect)
     raw_rows = list(reader)
     if not raw_rows:
@@ -74,6 +101,29 @@ def _read_text(path: Path) -> str:
         except UnicodeDecodeError as error:
             errors.append(error)
     raise ValueError(f"无法识别映射文件编码：{errors[-1]}")
+
+
+def _detect_dialect(sample: str, suffix: str) -> type[csv.Dialect] | csv.Dialect:
+    try:
+        return csv.Sniffer().sniff(sample, delimiters=",\t;|")
+    except csv.Error:
+        return csv.excel_tab if suffix == ".txt" else csv.excel
+
+
+def _load_excel_columns(path: Path) -> tuple[str, ...]:
+    try:
+        import openpyxl
+    except ImportError as error:
+        raise ValueError("读取 Excel 需要 openpyxl，请先运行 uv sync") from error
+
+    workbook = openpyxl.load_workbook(path, read_only=True, data_only=True)
+    try:
+        header = next(workbook.active.iter_rows(values_only=True), None)
+    finally:
+        workbook.close()
+    if header is None:
+        raise ValueError("Excel 映射表为空")
+    return _columns_from_values(header)
 
 
 def _load_excel_table(path: Path) -> MappingTable:
@@ -94,13 +144,7 @@ def _load_excel_table(path: Path) -> MappingTable:
 
 
 def _table_from_rows(raw_rows: list[list[Any]]) -> MappingTable:
-    columns = tuple(_cell_text(value) for value in raw_rows[0])
-    if len(columns) < 2:
-        raise ValueError("映射表至少需要两列")
-    if any(not column for column in columns):
-        raise ValueError("映射表包含空列标题")
-    if len(set(columns)) != len(columns):
-        raise ValueError("映射表包含重复的列标题")
+    columns = _columns_from_values(raw_rows[0])
 
     rows = []
     for values in raw_rows[1:]:
@@ -112,6 +156,17 @@ def _table_from_rows(raw_rows: list[list[Any]]) -> MappingTable:
             }
         )
     return MappingTable(columns, tuple(rows))
+
+
+def _columns_from_values(values: list[Any] | tuple[Any, ...]) -> tuple[str, ...]:
+    columns = tuple(_cell_text(value) for value in values)
+    if len(columns) < 2:
+        raise ValueError("映射表至少需要两列")
+    if any(not column for column in columns):
+        raise ValueError("映射表包含空列标题")
+    if len(set(columns)) != len(columns):
+        raise ValueError("映射表包含重复的列标题")
+    return columns
 
 
 def _cell_text(value: Any) -> str:

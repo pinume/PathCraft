@@ -1,6 +1,5 @@
 import os
 import re
-import stat
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -10,21 +9,13 @@ from .config import IMAGE_EXTENSIONS
 def is_hidden(path: Path) -> bool:
     if path.name.startswith("."):
         return True
-    if os.name == "nt":
-        try:
-            import ctypes
-
-            attributes = ctypes.windll.kernel32.GetFileAttributesW(str(path))
-        except (AttributeError, OSError):
-            return False
-        return attributes != -1 and bool(attributes & 0x2)
     try:
-        hidden_flag = getattr(stat, "UF_HIDDEN", 0)
-        if not hidden_flag:
-            return False
-        return bool(getattr(path.stat(), "st_flags", 0) & hidden_flag)
-    except OSError:
+        import ctypes
+
+        attributes = ctypes.windll.kernel32.GetFileAttributesW(str(path))
+    except (AttributeError, OSError):
         return False
+    return attributes != -1 and bool(attributes & 0x2)
 
 
 def is_hidden_within(path: Path, root: Path) -> bool:
@@ -53,15 +44,21 @@ def find_files(
         return []
     if recursive:
         candidates = _walk_files(root)
+        files = (
+            path
+            for path in candidates
+            if path.is_file()
+            and (all_files or path.suffix.lower() in IMAGE_EXTENSIONS)
+        )
     else:
         candidates = root.iterdir()
-    files = (
-        path
-        for path in candidates
-        if path.is_file()
-        and not is_hidden_within(path, root)
-        and (all_files or path.suffix.lower() in IMAGE_EXTENSIONS)
-    )
+        files = (
+            path
+            for path in candidates
+            if path.is_file()
+            and not is_hidden(path)
+            and (all_files or path.suffix.lower() in IMAGE_EXTENSIONS)
+        )
     return sorted(files, key=lambda path: _natural_sort_key(path.relative_to(root)))
 
 

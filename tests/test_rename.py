@@ -108,8 +108,7 @@ class RenameTests(unittest.TestCase):
         self.assertEqual(plan[1].problem, "删除后文件名为空")
 
     def test_generated_filename_is_validated_for_current_platform(self) -> None:
-        with patch("pathcraft.utils.platform.system", return_value="Windows"):
-            plan = build_plan([Path("xCON.txt")], RenameRule(remove="x"))
+        plan = build_plan([Path("xCON.txt")], RenameRule(remove="x"))
 
         self.assertEqual(plan[0].problem, "Windows 保留文件名")
 

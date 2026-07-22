@@ -13,7 +13,7 @@ from pathcraft.pdf.extract import (
 )
 from pathcraft.pdf import render
 from pathcraft.pdf.render import convert_pdf_plan, execute_conversion_plans
-from tests.pdf_fakes import FakePage, FakePyMuPDF
+from tests.pdf_fakes import FakePage, FakePixmap, FakePyMuPDF
 
 try:
     pymupdf = load_pymupdf()
@@ -109,6 +109,35 @@ class PdfRenderTests(unittest.TestCase):
 
             self.assertTrue(source.exists())
             self.assertFalse(list(root.rglob("*.png")))
+
+    def test_partial_render_file_is_removed_after_save_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "invoice.pdf"
+            source.touch()
+            plan = PdfConversionPlan(
+                source,
+                "示例公司",
+                (root / "示例公司.png",),
+                root / ".pdf" / "invoice.pdf",
+            )
+
+            def partial_save(_pixmap, path: Path) -> None:
+                Path(path).write_bytes(b"partial")
+                raise OSError("模拟部分写入失败")
+
+            with patch.object(FakePixmap, "save", partial_save):
+                with self.assertRaisesRegex(PdfRenderError, "第 1 页渲染失败"):
+                    convert_pdf_plan(
+                        plan,
+                        300,
+                        pymupdf_module=FakePyMuPDF([FakePage()]),
+                    )
+
+            self.assertTrue(source.exists())
+            self.assertFalse(
+                [path for path in root.iterdir() if path.name.endswith(".working.png")]
+            )
 
     def test_archive_failure_rolls_back_images_and_keeps_source(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

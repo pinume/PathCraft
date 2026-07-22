@@ -1,115 +1,45 @@
 # PathCraft
 
+PathCraft 是仅支持 Windows 10/11 的便携桌面文件处理 App，提供：
 
-### Ubuntu 安装
+- 批量添加前缀或后缀
+- 批量删除或替换文件名内容
+- 使用 Excel、CSV 或 TXT 映射表重命名
+- 识别电子发票购买方并将 PDF 转换为 PNG
+- 执行前完整预览、冲突阻止和失败回滚
 
-如果尚未安装 uv：
+## 直接使用
 
-```shell
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
+获取 [PathCraft.exe](dist/PathCraft.exe) 后双击即可运行。
 
-重新打开终端，然后获取并安装 PathCraft：
+不需要安装，不需要管理员权限，也不需要单独安装 Python、`uv` 或依赖包。EXE 可以复制到
+任意普通目录或 U 盘中运行。PathCraft 不提供 CLI、安装脚本或 Linux 版本。
 
-```shell
-git clone https://github.com/pinume/PathCraft.git
-cd PathCraft
-./install.sh
-```
+首次启动单文件 EXE 时，Windows 需要将内置运行文件解压到临时目录，因此可能比后续窗口
+操作稍慢。如果 Windows SmartScreen 显示未知发布者，这是因为当前 EXE 尚未进行代码签名。
 
-如果提示没有执行权限：
+## 从源码构建便携 EXE
 
-```shell
-chmod +x install.sh
-./install.sh
-```
-
-安装完成后重新打开终端，然后运行：
-
-```shell
-pathcraft
-```
-
-### Windows 安装
-
-在 PowerShell 中安装 uv：
+开发者需要先安装 `uv`，然后在 PowerShell 中运行：
 
 ```powershell
-powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+.\build.ps1
 ```
 
-重新打开 PowerShell，然后获取并安装 PathCraft：
+脚本会在隔离的构建环境中使用 PyInstaller，最终只需分发：
+
+```text
+dist\PathCraft.exe
+```
+
+构建脚本仅打包 App 实际使用的模块，并排除数据分析、绘图和终端界面等可选依赖。
+`build/` 中的内容都是临时构建文件，不需要分发。
+
+## 开发与测试
 
 ```powershell
-git clone https://github.com/pinume/PathCraft.git
-cd PathCraft
-.\install.ps1
+uv sync
+uv run python -m unittest discover -v
 ```
 
-如果 PowerShell 阻止本地脚本运行：
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\install.ps1
-```
-
-安装完成后重新打开 PowerShell，然后运行：
-
-```powershell
-pathcraft
-```
-
-### 安装后删除项目目录
-
-安装脚本使用非 editable 模式，将 PathCraft 复制到 uv 的独立工具环境。
-确认 `pathcraft` 可以正常启动后，可以删除克隆下来的 `PathCraft` 项目目录，
-不会影响已经安装的命令。删除前请确认个人修改已经提交、推送或备份。
-
-Ubuntu 可以查看工具及命令的实际安装位置：
-
-```shell
-uv tool list --show-paths
-uv tool dir
-uv tool dir --bin
-command -v pathcraft
-```
-
-Windows PowerShell 可以执行：
-
-```powershell
-uv tool list --show-paths
-uv tool dir
-uv tool dir --bin
-Get-Command pathcraft
-```
-
-### 更新
-
-如果保留了项目目录，Ubuntu 执行：
-
-```shell
-cd PathCraft
-git pull
-./install.sh
-```
-
-Windows PowerShell 执行：
-
-```powershell
-cd PathCraft
-git pull
-.\install.ps1
-```
-
-如果已经删除项目目录，Windows 和 Ubuntu 都可以直接从 GitHub 更新：
-
-```shell
-uv tool install --reinstall "git+https://github.com/pinume/PathCraft.git"
-```
-
-### 卸载
-
-Windows 和 Ubuntu 都可以执行：
-
-```shell
-uv tool uninstall pathcraft
-```
+开发环境中可以执行 `uv run pathcraft` 启动 GUI；最终用户只使用便携 EXE。
