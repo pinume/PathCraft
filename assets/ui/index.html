@@ -8,14 +8,15 @@
   <script src="app.js" defer></script>
 </head>
 <body>
-  <div id="appWindow" class="window-frame">
+  <div id="appWindow" class="window-frame" data-workflow="setup">
     <header id="titlebar" class="titlebar">
       <div class="titlebar-drag pywebview-drag-region" aria-hidden="true"></div>
       <div class="titlebar-brand">
         <span class="titlebar-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none"><path d="M4 20 20 4m0 0h-8m8 0v8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <svg viewBox="0 0 24 24" fill="none"><path d="M5 19 19 5m0 0h-7m7 0v7" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </span>
         <span>PathCraft</span>
+        <span id="version" class="title-version">v—</span>
       </div>
       <div class="titlebar-controls">
         <button id="minimizeWindow" type="button" aria-label="最小化">
@@ -31,113 +32,176 @@
       </div>
     </header>
 
-  <main class="app-shell">
     <header class="app-header">
-      <div class="brand-copy">
-        <h1>PathCraft</h1>
-        <p>批量文件路径处理工具</p>
+      <div class="app-brand">
+        <span class="app-logo" aria-hidden="true">
+          <svg viewBox="0 0 32 32" fill="none"><path d="M8 24 24 8m0 0H14m10 0v10" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+        <div>
+          <h1>批量文件处理工具</h1>
+          <p>预览、检查并安全执行文件名与 PDF 转换任务</p>
+        </div>
       </div>
-      <span id="version" class="version">v—</span>
+      <div class="header-badges">
+        <span class="header-badge"><span class="header-badge-dot"></span>本地处理</span>
+      </div>
     </header>
 
-    <section class="card settings-card" aria-labelledby="settings-title">
-      <h2 id="settings-title" class="sr-only">处理设置</h2>
-      <div class="field-row">
-        <label for="rootInput">工作目录</label>
-        <div class="field-control with-action">
-          <input id="rootInput" class="mono" type="text" readonly>
-          <button id="rootBrowse" class="inside-button" type="button">选择…</button>
-        </div>
-      </div>
-      <div class="field-row">
-        <label for="operationSelect">操作</label>
-        <div class="field-control">
-          <select id="operationSelect"></select>
-        </div>
-      </div>
-      <div id="operationFields"></div>
-    </section>
-
-    <section class="action-panel" aria-label="操作与进度">
-    <div class="actions">
-      <button id="previewButton" class="button secondary" type="button">
-        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-        生成预览
-      </button>
-      <button id="executeButton" class="button primary" type="button" disabled>
-        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m5 12 5 5L20 7"/></svg>
-        <span id="executeLabel">执行</span>
-      </button>
-      <span class="action-divider" aria-hidden="true"></span>
-      <button id="undoButton" class="button ghost" type="button" disabled>
-        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-2"/></svg>
-        撤销上次操作
-      </button>
-      <div id="statusLine" class="status-line" data-tone="amber" role="status" aria-live="polite">
-        <span class="status-dot" aria-hidden="true"></span>
-        <span id="statusText">正在初始化…</span>
-      </div>
-    </div>
-      <div id="progressTrack" class="progress-track" role="progressbar" aria-label="处理进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden>
-        <div id="progressFill" class="progress-fill"></div>
-      </div>
-    </section>
-
-    <section class="card results-card" aria-label="处理结果">
-      <div id="resultsToolbar" class="results-toolbar" hidden>
-        <label class="result-search" for="resultSearch">
-          <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/></svg>
-          <input id="resultSearch" type="search" placeholder="搜索文件名或说明" autocomplete="off">
-        </label>
-        <select id="statusFilter" class="status-filter" aria-label="按状态筛选">
-          <option value="all">全部状态</option>
-          <option value="ready">待处理</option>
-          <option value="done">已处理</option>
-          <option value="blocked">已阻止</option>
-          <option value="issue">处理详情</option>
-          <option value="current">当前文件</option>
-        </select>
-        <span id="filterCount" class="filter-count"></span>
-      </div>
-      <div id="tableScroll" class="table-scroll">
-        <table id="resultTable" hidden>
-          <thead>
-            <tr>
-              <th class="source-column">源文件</th>
-              <th class="destination-column">目标 / 输出</th>
-              <th class="status-column">状态</th>
-              <th>说明</th>
-            </tr>
-          </thead>
-          <tbody id="resultBody"></tbody>
-        </table>
-        <div id="emptyState" class="empty-state">
-          <div class="empty-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/></svg>
+    <main class="app-main">
+      <aside class="sidebar" aria-label="处理方式与参数">
+        <section class="sidebar-section operation-section" aria-labelledby="operation-title">
+          <div class="sidebar-heading">
+            <span>处理方式</span>
+            <small>选择一项操作</small>
           </div>
-          <h2>还没有预览结果</h2>
-          <p>设置好操作参数后，点击 <button id="emptyPreviewButton" class="inline-action" type="button">生成预览</button> 查看将被处理的文件列表</p>
+          <select id="operationSelect" class="native-operation-select" aria-label="处理方式"></select>
+          <nav id="operationMenu" class="operation-menu" aria-labelledby="operation-title"></nav>
+        </section>
+
+        <section class="sidebar-section settings-section" aria-labelledby="settings-title">
+          <div class="sidebar-heading compact-heading">
+            <span id="settings-title">参数设置</span>
+          </div>
+          <div id="operationFields" class="operation-fields"></div>
+        </section>
+
+        <section class="sidebar-section sidebar-help" aria-label="使用提示">
+          <div class="help-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.8 9a2.3 2.3 0 0 1 4.4 1c0 1.7-2.2 2-2.2 3.5M12 17h.01"/></svg>
+          </div>
+          <div>
+            <strong>先预览再执行</strong>
+            <span>冲突文件会在列表中标记，不会直接覆盖。</span>
+          </div>
+        </section>
+      </aside>
+
+      <section class="workspace">
+        <section id="rootBrowse" class="drop-zone" role="button" tabindex="0" aria-label="选择工作目录">
+          <div class="drop-zone-icon" aria-hidden="true">
+            <svg viewBox="0 0 32 32" fill="none"><path d="M4.5 10.5a3 3 0 0 1 3-3h6l3 3h8a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3h-17a3 3 0 0 1-3-3v-13Z"/><path d="M16 21v-7m0 0-3 3m3-3 3 3"/></svg>
+          </div>
+          <div class="drop-zone-copy">
+            <strong>拖入文件或文件夹到此处</strong>
+            <span>或点击选择工作目录</span>
+          </div>
+          <div class="drop-zone-path">
+            <span class="path-label">当前目录</span>
+            <input id="rootInput" class="mono" type="text" readonly placeholder="尚未选择目录" aria-label="当前工作目录">
+          </div>
+        </section>
+
+        <section class="file-panel" aria-label="文件列表与实时预览">
+          <header class="file-panel-header">
+            <div class="panel-title">
+              <span class="panel-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/></svg>
+              </span>
+              <div>
+                <h2>文件列表</h2>
+                <p id="directoryName">目录：—</p>
+              </div>
+            </div>
+            <div class="panel-counts">
+              <span id="fileCount">0 个文件</span>
+              <span id="filterCount" class="filter-count"></span>
+            </div>
+          </header>
+
+          <div id="resultsToolbar" class="results-toolbar" hidden>
+            <label class="result-search" for="resultSearch">
+              <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/></svg>
+              <input id="resultSearch" type="search" placeholder="搜索文件名、目标名称或说明" autocomplete="off">
+            </label>
+            <select id="statusFilter" class="status-filter" aria-label="按状态筛选">
+              <option value="all">全部状态</option>
+              <option value="ready">待处理</option>
+              <option value="done">已处理</option>
+              <option value="blocked">已阻止</option>
+              <option value="issue">处理详情</option>
+              <option value="current">当前文件</option>
+            </select>
+          </div>
+
+          <div id="previewStaleNotice" class="preview-stale-notice" role="status" hidden>
+            参数已更改，当前结果仅供参考。请重新生成预览后再执行。
+          </div>
+
+          <div id="tableScroll" class="table-scroll">
+            <table id="resultTable" hidden>
+              <thead>
+                <tr>
+                  <th class="source-column">原文件</th>
+                  <th class="destination-column">新名称 / 输出</th>
+                  <th class="status-column">状态</th>
+                  <th>说明</th>
+                </tr>
+              </thead>
+              <tbody id="resultBody"></tbody>
+            </table>
+
+            <div id="emptyState" class="empty-state">
+              <div class="empty-folder" aria-hidden="true">
+                <svg viewBox="0 0 36 36" fill="none"><path d="M4.5 11a3 3 0 0 1 3-3h7l3 3h11a3 3 0 0 1 3 3v13a3 3 0 0 1-3 3h-21a3 3 0 0 1-3-3V11Z"/><path d="M18 24v-7m0 0-3 3m3-3 3 3"/></svg>
+              </div>
+              <h3>还没有文件预览</h3>
+              <p>选择目录后会显示当前文件；使用底部“生成预览”检查全部变更。</p>
+            </div>
+
+            <div id="filterEmptyState" class="filter-empty-state" hidden>
+              <strong>没有匹配的结果</strong>
+              <span>请更换关键词或状态筛选</span>
+            </div>
+          </div>
+
+          <footer class="preview-footer">
+            <div class="preview-label">
+              <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+              <span>实时预览</span>
+              <small>目标名称中的变更内容会高亮显示</small>
+            </div>
+            <span class="safe-note">仅执行“待处理”项目</span>
+          </footer>
+        </section>
+      </section>
+    </main>
+
+    <footer class="action-bar" aria-label="状态和操作">
+      <div class="action-status-wrap">
+        <div id="statusLine" class="status-line" data-tone="amber" role="status" aria-live="polite">
+          <span class="status-dot" aria-hidden="true"></span>
+          <div>
+            <strong id="footerState">正在初始化</strong>
+            <span id="statusText">正在初始化…</span>
+          </div>
         </div>
-        <div id="filterEmptyState" class="filter-empty-state" hidden>
-          <strong>没有匹配的结果</strong>
-          <span>尝试更换关键词或状态筛选</span>
+        <div id="progressTrack" class="progress-track" role="progressbar" aria-label="处理进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden>
+          <div id="progressFill" class="progress-fill"></div>
         </div>
       </div>
-      <footer class="results-footer">
-        <span id="footerState">就绪</span>
-        <div>
-          <span id="fileCount">0 个文件</span>
-          <span id="directoryName">目录：—</span>
-        </div>
-      </footer>
-    </section>
-    <p class="interaction-note">↑ 点击“生成预览”查看将被处理的文件</p>
-  </main>
+      <div class="action-buttons">
+        <button id="undoButton" class="button ghost" type="button" disabled>
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-2"/></svg>
+          <span id="undoLabel">撤销</span>
+        </button>
+        <button id="previewButton" class="button secondary" type="button">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+          生成预览
+        </button>
+        <button id="executeButton" class="button primary" type="button" disabled>
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m5 12 5 5L20 7"/></svg>
+          <span id="executeLabel">执行处理</span>
+        </button>
+      </div>
+    </footer>
+
     <div id="dropOverlay" class="drop-overlay" hidden aria-hidden="true">
       <div class="drop-card">
-        <svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/><path d="M12 15V9m0 0-2.5 2.5M12 9l2.5 2.5"/></svg>
+        <div class="drop-card-icon">
+          <svg viewBox="0 0 32 32" fill="none"><path d="M4.5 10.5a3 3 0 0 1 3-3h6l3 3h8a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3h-17a3 3 0 0 1-3-3v-13Z"/><path d="M16 21v-7m0 0-3 3m3-3 3 3"/></svg>
+        </div>
         <strong>释放以选择工作目录</strong>
-        <span>拖入文件时将使用它所在的目录</span>
+        <span>拖入文件时会使用该文件所在的目录</span>
       </div>
     </div>
   </div>

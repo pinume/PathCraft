@@ -69,6 +69,13 @@ class Bridge:
         )
         return {"cancelled": not selected, "path": selected[0] if selected else ""}
 
+    def list_files(self, root: str) -> dict[str, object]:
+        """Return the current files for immediate display after selecting a directory."""
+        self._require_idle()
+        resolved = Path(root).expanduser().resolve()
+        files = list_current_files(resolved)
+        return _serialize_current_files(resolved, files)
+
     def choose_mapping(self, initial_directory: str = "") -> dict[str, object]:
         self._require_idle()
         window = self._require_window()
@@ -161,7 +168,9 @@ class Bridge:
         )
         return {"started": True}
 
-    def undo(self) -> dict[str, object]:
+    def undo(self, confirmed: bool = False) -> dict[str, object]:
+        if not confirmed:
+            raise ValueError("请再次点击撤销按钮确认操作")
         with self._state_lock:
             if self._busy:
                 raise RuntimeError("已有任务正在处理中")
@@ -169,14 +178,6 @@ class Bridge:
             if operation is None:
                 raise ValueError("没有可撤销的操作")
             self._busy = True
-        confirmed = self._require_window().create_confirmation_dialog(
-            "确认撤销？",
-            "撤销将把最近一次执行成功的文件恢复到操作前状态。\n\n"
-            "若文件已被修改、替换或原路径被占用，PathCraft 会安全跳过。",
-        )
-        if not confirmed:
-            self._release_task()
-            return {"started": False, "cancelled": True}
         with self._state_lock:
             self._prepared = None
         self._start_worker(
@@ -380,6 +381,26 @@ def _serialize_completion(
         "fileCount": len(files),
         "canUndo": summary.undo is not None,
         "rows": rows,
+    }
+
+
+def _serialize_current_files(
+    root: Path,
+    files: tuple[Path, ...],
+) -> dict[str, object]:
+    return {
+        "root": str(root),
+        "directory": root.name,
+        "fileCount": len(files),
+        "rows": [
+            {
+                "source": _relative_text(path, root),
+                "destination": "",
+                "status": "current",
+                "detail": "",
+            }
+            for path in files
+        ],
     }
 
 

@@ -163,7 +163,12 @@ def build_conversion_plans(
                     raise EncryptedPdfError("PDF 已加密，需要密码")
                 if document.page_count == 0:
                     raise EmptyPdfError("PDF 不包含页面")
-                buyer_name = recognize_buyer_name(document)
+                try:
+                    buyer_name = recognize_buyer_name(document)
+                except BuyerNameRecognitionError:
+                    # 普通 PDF 或版式不同的发票仍应能够转换；此时使用
+                    # 原 PDF 文件名作为图片名，不把识别失败视为规划失败。
+                    buyer_name = _safe_filename_stem(source.stem)
                 outputs = _available_output_paths(
                     output_directory,
                     buyer_name,

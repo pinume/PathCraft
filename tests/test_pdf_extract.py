@@ -79,6 +79,23 @@ class PdfExtractTests(unittest.TestCase):
         ):
             recognize_buyer_name(FakeDocument([FakePage([])]))
 
+    def test_plan_uses_original_pdf_name_when_buyer_cannot_be_recognized(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "普通文件.pdf"
+            source.touch()
+            module = FakePyMuPDF([FakePage([]), FakePage([])])
+
+            plans, failures = build_conversion_plans(root, pymupdf_module=module)
+
+            self.assertFalse(failures)
+            self.assertEqual(len(plans), 1)
+            self.assertEqual(plans[0].buyer_name, "普通文件")
+            self.assertEqual(
+                [output.name for output in plans[0].outputs],
+                ["普通文件_第1页.png", "普通文件_第2页.png"],
+            )
+
     def test_plans_report_encrypted_and_empty_pdfs_without_stopping(self) -> None:
         class PlanningModule:
             def open(self, path):

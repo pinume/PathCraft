@@ -78,6 +78,21 @@ class DesktopBridgeTests(unittest.TestCase):
         self.assertFalse(result["cancelled"])
         self.assertEqual(result["columns"], ["旧名", "新名"])
 
+    def test_list_files_serializes_current_directory_rows(self) -> None:
+        bridge = Bridge()
+        root = Path.cwd().resolve()
+
+        with patch(
+            "pathcraft.desktop_bridge.list_current_files",
+            return_value=(root / "one.txt", root / "nested" / "two.txt"),
+        ):
+            result = bridge.list_files(str(root))
+
+        self.assertEqual(result["fileCount"], 2)
+        self.assertEqual(result["rows"][0]["source"], "one.txt")
+        self.assertEqual(result["rows"][1]["source"], str(Path("nested") / "two.txt"))
+        self.assertTrue(all(row["status"] == "current" for row in result["rows"]))
+
     def test_drop_resolves_directories_and_file_parents(self) -> None:
         bridge = Bridge()
         root = Path.cwd().resolve()
@@ -144,17 +159,12 @@ class DesktopBridgeTests(unittest.TestCase):
         self.assertIn('"event":"completed"', script)
         self.assertIn('"source":"new.txt"', script)
 
-    def test_undo_requires_native_confirmation(self) -> None:
+    def test_undo_requires_explicit_confirmation(self) -> None:
         bridge = Bridge()
-        window = Mock()
-        window.create_confirmation_dialog.return_value = False
-        bridge._attach_window(window)
         bridge._undo = UndoOperation("rename", Path.cwd())
 
-        result = bridge.undo()
-
-        self.assertEqual(result, {"started": False, "cancelled": True})
-        window.create_confirmation_dialog.assert_called_once()
+        with self.assertRaisesRegex(ValueError, "再次点击撤销按钮"):
+            bridge.undo()
         self.assertFalse(bridge._busy)
 
     def test_host_events_are_json_encoded(self) -> None:

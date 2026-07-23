@@ -17,16 +17,19 @@ const state = {
   trackingExecution: false,
   dragDepth: 0,
   filterTimer: 0,
+  undoConfirmationArmed: false,
+  undoConfirmationTimer: 0,
 };
 
 document.addEventListener("DOMContentLoaded", () => {
   for (const id of [
     "appWindow", "titlebar", "minimizeWindow", "maximizeWindow", "closeWindow",
-    "version", "rootInput", "rootBrowse", "operationSelect", "operationFields",
-    "previewButton", "executeButton", "executeLabel", "undoButton", "statusLine",
+    "version", "rootInput", "rootBrowse", "operationSelect", "operationMenu", "operationFields",
+    "previewButton", "executeButton", "executeLabel", "undoButton", "undoLabel", "statusLine",
     "statusText", "progressTrack", "progressFill", "tableScroll", "resultTable", "resultBody",
     "resultsToolbar", "resultSearch", "statusFilter", "filterCount",
-    "emptyState", "emptyPreviewButton", "filterEmptyState", "dropOverlay", "footerState",
+    "emptyState", "filterEmptyState", "previewStaleNotice",
+    "dropOverlay", "footerState",
     "fileCount", "directoryName",
   ]) elements[id] = document.getElementById(id);
 });
@@ -38,9 +41,12 @@ window.addEventListener("pywebviewready", async () => {
     elements.version.textContent = `v${initial.version}`;
     elements.rootInput.value = initial.root;
     elements.operationSelect.replaceChildren(...initial.operations.map(operationOption));
+    renderOperationMenu(initial.operations);
     renderOperationFields();
     updateDirectory(initial.root);
-    setStatus("请选择目录和操作，然后生成预览。", "amber");
+    setWorkflowState("setup");
+    setStatus("请选择目录和操作，然后生成预览。", "amber", "等待预览");
+    applyBusyState();
   } catch (error) {
     showError(error);
   }
@@ -54,12 +60,17 @@ function bindEvents() {
     if (!event.target.closest(".titlebar-controls")) window.pywebview.api.toggle_maximize_window();
   });
   elements.rootBrowse.addEventListener("click", chooseRoot);
+  elements.rootBrowse.addEventListener("keydown", event => {
+    if (["Enter", " "].includes(event.key) && !state.busy) {
+      event.preventDefault();
+      chooseRoot();
+    }
+  });
   elements.operationSelect.addEventListener("change", () => {
     renderOperationFields();
     invalidatePreview();
   });
   elements.previewButton.addEventListener("click", preview);
-  elements.emptyPreviewButton.addEventListener("click", preview);
   elements.executeButton.addEventListener("click", executePrepared);
   elements.undoButton.addEventListener("click", undoLast);
   elements.resultSearch.addEventListener("input", scheduleFilteredRender);
@@ -67,6 +78,63 @@ function bindEvents() {
   elements.tableScroll.addEventListener("scroll", scheduleVirtualRender);
   window.addEventListener("resize", scheduleVirtualRender);
   setupDragAndDrop();
+}
+
+function setWorkflowState(value) {
+  elements.appWindow.dataset.workflow = value;
+}
+
+function renderOperationMenu(operations) {
+  const fragment = document.createDocumentFragment();
+  for (const operation of operations) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "operation-button";
+    button.dataset.operation = operation.value;
+    button.append(operationIcon(operation.value));
+
+    const label = document.createElement("span");
+    label.textContent = operation.label;
+    button.append(label);
+
+    const arrow = document.createElement("span");
+    arrow.className = "operation-arrow";
+    arrow.textContent = "›";
+    button.append(arrow);
+
+    button.addEventListener("click", () => {
+      if (state.busy || elements.operationSelect.value === operation.value) return;
+      elements.operationSelect.value = operation.value;
+      elements.operationSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    fragment.append(button);
+  }
+  elements.operationMenu.replaceChildren(fragment);
+  updateOperationMenuSelection();
+}
+
+function operationIcon(value) {
+  const wrapper = document.createElement("span");
+  wrapper.className = "operation-icon";
+  const paths = {
+    prefix: '<path d="M7 7h10M7 12h7M7 17h10"/><path d="M4 7h.01M4 12h.01M4 17h.01"/>',
+    suffix: '<path d="M6 7h10M9 12h7M6 17h10"/><path d="M19 7h.01M19 12h.01M19 17h.01"/>',
+    remove: '<path d="M5 7h14M9 7V5h6v2m-8 0 1 13h8l1-13M10 11v5m4-5v5"/>',
+    replace: '<path d="M4 7h11m0 0-3-3m3 3-3 3M20 17H9m0 0 3-3m-3 3 3 3"/>',
+    mapping: '<path d="M4 5h6v6H4zM14 13h6v6h-6zM10 8h3a4 4 0 0 1 4 4v1M14 16h-3a4 4 0 0 1-4-4v-1"/>',
+    pdf: '<path d="M7 3h7l4 4v14H7zM14 3v5h5"/><path d="M9.5 16v-4h1.4a1.2 1.2 0 0 1 0 2.4H9.5m4-2.4v4h1a2 2 0 0 0 0-4h-1Zm5 4v-4h2.5"/>',
+  };
+  wrapper.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[value] || '<path d="M5 5h14v14H5z"/>'}</svg>`;
+  return wrapper;
+}
+
+function updateOperationMenuSelection() {
+  if (!elements.operationMenu) return;
+  for (const button of elements.operationMenu.querySelectorAll(".operation-button")) {
+    const active = button.dataset.operation === elements.operationSelect.value;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-current", active ? "true" : "false");
+  }
 }
 
 function operationOption(operation) {
@@ -136,6 +204,7 @@ function setupDragAndDrop() {
 
 function renderOperationFields() {
   const operation = elements.operationSelect.value || "prefix";
+  updateOperationMenuSelection();
   elements.operationFields.replaceChildren();
   if (["prefix", "suffix", "remove", "replace"].includes(operation)) {
     const labels = { prefix: "前缀", suffix: "后缀", remove: "删除内容", replace: "查找内容" };
@@ -154,7 +223,7 @@ function renderOperationFields() {
     const hint = document.createElement("div");
     hint.className = "hint";
     hint.textContent = "识别电子发票购买方，并在原目录生成 PNG";
-    elements.operationFields.append(fieldRow("", hint));
+    elements.operationFields.append(fieldRow("输出说明", hint));
   }
   applyBusyState();
 }
@@ -165,12 +234,13 @@ function renderMappingFields() {
   input.className = "mono";
   input.type = "text";
   input.readOnly = true;
+  input.placeholder = "请选择 Excel 或 CSV 文件";
   input.value = state.mappingFile;
   const button = document.createElement("button");
   button.id = "mappingBrowse";
   button.type = "button";
   button.className = "inside-button";
-  button.textContent = "选择…";
+  button.textContent = "选择";
   button.addEventListener("click", chooseMapping);
   elements.operationFields.append(fieldRow("映射文件", [input, button], "with-action"));
   if (state.mappingColumns.length) {
@@ -211,17 +281,43 @@ function updateHint() {
 }
 
 async function chooseRoot() {
+  if (state.busy) return;
+  resetUndoConfirmation();
   try {
     const result = await window.pywebview.api.choose_root(elements.rootInput.value);
     if (!result.cancelled) {
       elements.rootInput.value = result.path;
       updateDirectory(result.path);
       invalidatePreview();
+      await refreshCurrentFiles(result.path);
     }
   } catch (error) { showError(error); }
 }
 
+async function refreshCurrentFiles(path) {
+  state.prepared = false;
+  state.trackingExecution = false;
+  setProgress(0, false);
+  setBusy(true);
+  setWorkflowState("setup");
+  setStatus("正在读取当前目录…", "navy", "加载文件");
+  try {
+    const result = await window.pywebview.api.list_files(path);
+    renderRows(result.rows);
+    elements.fileCount.textContent = `${result.fileCount} 个文件`;
+    elements.directoryName.textContent = `目录：${result.directory || "—"}`;
+    setStatus(
+      result.fileCount ? `已显示当前目录中的 ${result.fileCount} 个文件。` : "当前目录中没有可显示的文件。",
+      result.fileCount ? "green" : "amber",
+      "目录已加载",
+    );
+  } finally {
+    setBusy(false);
+  }
+}
+
 async function chooseMapping() {
+  if (state.busy) return;
   try {
     const result = await window.pywebview.api.choose_mapping(elements.rootInput.value);
     if (!result.cancelled) {
@@ -246,26 +342,29 @@ function previewArgs() {
 }
 
 async function preview() {
+  if (state.busy) return;
+  resetUndoConfirmation();
   state.prepared = false;
   state.trackingExecution = false;
   setProgress(0, false);
   setBusy(true);
-  setStatus("正在生成预览…", "navy");
-  elements.footerState.textContent = "处理中";
+  setWorkflowState("setup");
+  setStatus("正在扫描目录并生成预览…", "navy", "生成预览");
   try {
     const result = await window.pywebview.api.preview(previewArgs());
     state.prepared = true;
     renderRows(result.rows);
     elements.fileCount.textContent = `${result.total} 个文件`;
     elements.directoryName.textContent = `目录：${result.directory || "—"}`;
-    elements.footerState.textContent = "预览就绪";
+    setWorkflowState("preview");
     setStatus(
-      `预览已生成，共 ${result.total} 个文件，${result.readyCount} 个待处理，${result.blockedCount} 个已阻止。`,
+      `共 ${result.total} 个文件，${result.readyCount} 个待处理，${result.blockedCount} 个已阻止。`,
       result.readyCount ? "green" : "amber",
+      "预览就绪",
     );
     setBusy(false);
     elements.executeButton.disabled = result.readyCount === 0;
-    elements.executeLabel.textContent = result.readyCount ? `执行 (${result.readyCount})` : "执行";
+    elements.executeLabel.textContent = result.readyCount ? `执行处理 (${result.readyCount})` : "执行处理";
   } catch (error) {
     setBusy(false);
     showError(error);
@@ -273,18 +372,23 @@ async function preview() {
 }
 
 async function executePrepared() {
+  if (state.busy || !state.prepared) return;
+  resetUndoConfirmation();
   state.trackingExecution = true;
   setProgress(0, true);
   setBusy(true);
-  setStatus("正在执行…", "navy");
-  elements.footerState.textContent = "处理中";
+  setWorkflowState("running");
+  setStatus("正在处理文件，请不要关闭窗口。", "navy", "正在执行");
   try {
     const result = await window.pywebview.api.execute();
-    if (result.started) state.prepared = false;
-    else {
+    if (result.started) {
+      state.prepared = false;
+    } else {
       state.trackingExecution = false;
       setProgress(0, false);
       setBusy(false);
+      setWorkflowState("preview");
+      setStatus(result.message || "未执行任何操作。", "amber", "预览就绪");
     }
   } catch (error) {
     state.trackingExecution = false;
@@ -295,24 +399,29 @@ async function executePrepared() {
 }
 
 async function undoLast() {
+  if (state.busy || !state.canUndo) return;
+  if (!state.undoConfirmationArmed) {
+    state.undoConfirmationArmed = true;
+    elements.undoButton.classList.add("confirm-undo");
+    elements.undoButton.setAttribute("aria-pressed", "true");
+    elements.undoLabel.textContent = "确认撤销？";
+    setStatus("请再次点击红色按钮确认撤销。", "red", "等待确认");
+    state.undoConfirmationTimer = window.setTimeout(resetUndoConfirmation, 5000);
+    return;
+  }
+  resetUndoConfirmation();
   state.trackingExecution = false;
   setProgress(0, true);
   setBusy(true);
-  setStatus("等待撤销确认…", "amber");
+  setStatus("正在恢复上次操作前的文件状态…", "navy", "正在撤销");
   try {
-    const result = await window.pywebview.api.undo();
-    if (result.cancelled) {
-      setProgress(0, false);
-      setBusy(false);
-      setStatus("已取消撤销，上次操作仍可撤销。", "amber");
-      return;
-    }
+    const result = await window.pywebview.api.undo(true);
     if (result.root) {
       elements.rootInput.value = result.root;
       updateDirectory(result.root);
     }
-    setStatus("正在撤销上次操作…", "navy");
-    elements.footerState.textContent = "处理中";
+    setWorkflowState("running");
+    setStatus("正在恢复上次操作前的文件状态…", "navy", "正在撤销");
   } catch (error) {
     setProgress(0, false);
     setBusy(false);
@@ -320,42 +429,64 @@ async function undoLast() {
   }
 }
 
-window.pathcraftHostEvent = function ({ event, payload }) {
+function resetUndoConfirmation() {
+  window.clearTimeout(state.undoConfirmationTimer);
+  state.undoConfirmationTimer = 0;
+  state.undoConfirmationArmed = false;
+  elements.undoButton.classList.remove("confirm-undo");
+  elements.undoButton.setAttribute("aria-pressed", "false");
+  elements.undoLabel.textContent = "撤销";
+}
+
+window.pathcraftHostEvent = function ({ event, payload = {} } = {}) {
+  if (typeof event !== "string" || !payload || typeof payload !== "object") return;
   if (event === "window-state") {
-    elements.appWindow.classList.toggle("maximized", payload.maximized);
-    elements.maximizeWindow.setAttribute("aria-label", payload.maximized ? "还原" : "最大化");
+    const maximized = Boolean(payload.maximized);
+    elements.appWindow.classList.toggle("maximized", maximized);
+    elements.maximizeWindow.setAttribute("aria-label", maximized ? "还原" : "最大化");
     return;
   }
   if (event === "directory-dropped") {
+    if (typeof payload.path !== "string" || !payload.path) return;
     state.dragDepth = 0;
     elements.dropOverlay.hidden = true;
     elements.rootInput.value = payload.path;
     updateDirectory(payload.path);
     invalidatePreview();
-    setStatus(payload.fromFile ? "已选择拖入文件所在的目录，请生成预览。" : "已选择拖入的目录，请生成预览。", "green");
+    refreshCurrentFiles(payload.path).catch(showError);
     return;
   }
   if (event === "drop-error") {
     state.dragDepth = 0;
     elements.dropOverlay.hidden = true;
-    setStatus(payload.message, "red");
+    setStatus(String(payload.message || "无法处理拖入的项目。"), "red", "拖入失败");
     return;
   }
   if (event === "progress") {
-    if (state.trackingExecution) markProcessedThrough(payload.index);
-    const percent = payload.total ? (payload.index / payload.total) * 100 : 0;
+    const index = Number(payload.index);
+    const total = Number(payload.total);
+    if (!Number.isFinite(index) || !Number.isFinite(total) || index < 0 || total <= 0) return;
+    if (state.trackingExecution) markProcessedThrough(index);
+    const percent = Math.min(100, Math.max(0, (index / total) * 100));
     setProgress(percent, true);
-    setStatus(`处理中 ${payload.index}/${payload.total}：${payload.detail}`, "navy");
+    setStatus(`处理中 ${index}/${total}：${String(payload.detail || "")}`, "navy", "正在执行");
     return;
   }
   if (event === "error") {
     state.trackingExecution = false;
     setProgress(0, false);
     setBusy(false);
-    showError(payload.message);
+    showError(payload.message || "处理过程中发生未知错误。");
     return;
   }
   if (event === "completed") {
+    if (!Array.isArray(payload.rows) || typeof payload.root !== "string") {
+      state.trackingExecution = false;
+      setProgress(0, false);
+      setBusy(false);
+      showError("后端返回的完成信息不完整。");
+      return;
+    }
     state.trackingExecution = false;
     setProgress(100, true);
     state.prepared = false;
@@ -364,27 +495,30 @@ window.pathcraftHostEvent = function ({ event, payload }) {
     renderRows(payload.rows);
     elements.fileCount.textContent = `${payload.fileCount} 个文件`;
     elements.directoryName.textContent = `目录：${payload.directory || "—"}`;
-    elements.footerState.textContent = payload.action;
+    setWorkflowState("complete");
     const details = payload.detailsCount ? `；详细信息 ${payload.detailsCount} 条已显示` : "";
     setStatus(
-      `${payload.action}：成功 ${payload.succeeded}，跳过 ${payload.skipped}，失败 ${payload.failed}；当前目录共 ${payload.fileCount} 个文件${details}。`,
+      `成功 ${payload.succeeded}，跳过 ${payload.skipped}，失败 ${payload.failed}；当前目录共 ${payload.fileCount} 个文件${details}。`,
       payload.failed ? "red" : "green",
+      payload.action,
     );
     setBusy(false);
     window.setTimeout(() => {
       if (!state.busy && elements.progressTrack.getAttribute("aria-valuenow") === "100") {
         setProgress(0, false);
       }
-    }, 450);
+    }, 550);
   }
 };
 
 function invalidatePreview() {
+  const hadPreparedPreview = state.prepared;
   state.prepared = false;
-  elements.executeLabel.textContent = "执行";
+  setWorkflowState("setup");
+  elements.executeLabel.textContent = "执行处理";
   elements.executeButton.disabled = true;
-  elements.footerState.textContent = "等待预览";
-  setStatus("输入已更改，请重新生成预览。", "amber");
+  elements.previewStaleNotice.hidden = !hadPreparedPreview || state.rows.length === 0;
+  setStatus("输入已更改，请重新生成预览。", "amber", "等待预览");
 }
 
 function setBusy(busy) {
@@ -393,20 +527,24 @@ function setBusy(busy) {
 }
 
 function applyBusyState() {
-  elements.rootBrowse.disabled = state.busy;
+  elements.rootBrowse.setAttribute("aria-disabled", String(state.busy));
+  elements.rootBrowse.classList.toggle("disabled", state.busy);
   elements.operationSelect.disabled = state.busy;
+  for (const button of elements.operationMenu.querySelectorAll(".operation-button")) {
+    button.disabled = state.busy;
+  }
   elements.previewButton.disabled = state.busy;
   for (const control of elements.operationFields.querySelectorAll("input, select, button")) {
     control.disabled = state.busy;
   }
   elements.executeButton.disabled = state.busy || !state.prepared;
   elements.undoButton.disabled = state.busy || !state.canUndo;
-  elements.emptyPreviewButton.disabled = state.busy;
   elements.resultSearch.disabled = state.busy;
   elements.statusFilter.disabled = state.busy;
 }
 
 function renderRows(rows) {
+  elements.previewStaleNotice.hidden = true;
   let readyIndex = 0;
   state.rows = rows.map(row => ({
     ...row,
@@ -484,18 +622,12 @@ function scheduleVirtualRender() {
 function renderVirtualRows(force = false) {
   if (!state.visibleRows.length || elements.resultTable.hidden) return;
   const headerHeight = elements.resultTable.tHead?.offsetHeight || VIRTUAL_ROW_HEIGHT;
-  const viewportHeight = Math.max(
-    VIRTUAL_ROW_HEIGHT,
-    elements.tableScroll.clientHeight - headerHeight,
-  );
+  const viewportHeight = Math.max(VIRTUAL_ROW_HEIGHT, elements.tableScroll.clientHeight - headerHeight);
   const bodyScrollTop = Math.max(0, elements.tableScroll.scrollTop - headerHeight);
   const firstVisible = Math.floor(bodyScrollTop / VIRTUAL_ROW_HEIGHT);
   const start = Math.max(0, firstVisible - VIRTUAL_OVERSCAN);
   const visibleCount = Math.ceil(viewportHeight / VIRTUAL_ROW_HEIGHT);
-  const end = Math.min(
-    state.visibleRows.length,
-    firstVisible + visibleCount + VIRTUAL_OVERSCAN,
-  );
+  const end = Math.min(state.visibleRows.length, firstVisible + visibleCount + VIRTUAL_OVERSCAN);
   if (!force && start === state.virtualStart && end === state.virtualEnd) return;
   state.virtualStart = start;
   state.virtualEnd = end;
@@ -554,11 +686,7 @@ function appendDestinationDiff(cell, sourcePath, destination) {
   }
   const source = sourcePath.split(/[\\/]/).at(-1) || "";
   let prefixLength = 0;
-  while (
-    prefixLength < source.length
-    && prefixLength < destination.length
-    && source[prefixLength] === destination[prefixLength]
-  ) prefixLength += 1;
+  while (prefixLength < source.length && prefixLength < destination.length && source[prefixLength] === destination[prefixLength]) prefixLength += 1;
   let suffixLength = 0;
   while (
     suffixLength < source.length - prefixLength
@@ -579,10 +707,7 @@ function appendDestinationDiff(cell, sourcePath, destination) {
 
 function markProcessedThrough(index) {
   if (!Number.isInteger(index) || index < 1 || index > state.readyCount) {
-    console.warn("PathCraft progress index does not match a ready preview row", {
-      index,
-      readyCount: state.readyCount,
-    });
+    console.warn("PathCraft progress index does not match a ready preview row", { index, readyCount: state.readyCount });
     return;
   }
   state.processedThrough = Math.max(state.processedThrough, index);
@@ -605,14 +730,15 @@ function setProgress(percent, visible) {
   elements.progressFill.style.width = `${normalized}%`;
 }
 
-function setStatus(message, tone) {
+function setStatus(message, tone, title = null) {
   elements.statusText.textContent = message;
   elements.statusLine.dataset.tone = tone;
+  if (title !== null) elements.footerState.textContent = title;
 }
 
 function showError(error) {
-  elements.footerState.textContent = "错误";
-  setStatus(errorMessage(error), "red");
+  setWorkflowState("setup");
+  setStatus(errorMessage(error), "red", "发生错误");
 }
 
 function errorMessage(error) {
@@ -621,6 +747,7 @@ function errorMessage(error) {
 }
 
 function updateDirectory(path) {
-  const parts = path.replace(/[\\/]+$/, "").split(/[\\/]/);
+  const parts = String(path || "").replace(/[\\/]+$/, "").split(/[\\/]/);
   elements.directoryName.textContent = `目录：${parts.at(-1) || "—"}`;
+  elements.directoryName.title = path || "";
 }
