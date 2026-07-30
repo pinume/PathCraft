@@ -44,7 +44,6 @@ window.addEventListener("pywebviewready", async () => {
     renderOperationMenu(initial.operations);
     renderOperationFields();
     updateDirectory(initial.root);
-    setWorkflowState("setup");
     setStatus("请选择目录和操作，然后生成预览。", "amber", "等待预览");
     applyBusyState();
   } catch (error) {
@@ -78,10 +77,6 @@ function bindEvents() {
   elements.tableScroll.addEventListener("scroll", scheduleVirtualRender);
   window.addEventListener("resize", scheduleVirtualRender);
   setupDragAndDrop();
-}
-
-function setWorkflowState(value) {
-  elements.appWindow.dataset.workflow = value;
 }
 
 function renderOperationMenu(operations) {
@@ -299,7 +294,6 @@ async function refreshCurrentFiles(path) {
   state.trackingExecution = false;
   setProgress(0, false);
   setBusy(true);
-  setWorkflowState("setup");
   setStatus("正在读取当前目录…", "navy", "加载文件");
   try {
     const result = await window.pywebview.api.list_files(path);
@@ -348,7 +342,6 @@ async function preview() {
   state.trackingExecution = false;
   setProgress(0, false);
   setBusy(true);
-  setWorkflowState("setup");
   setStatus("正在扫描目录并生成预览…", "navy", "生成预览");
   try {
     const result = await window.pywebview.api.preview(previewArgs());
@@ -356,7 +349,6 @@ async function preview() {
     renderRows(result.rows);
     elements.fileCount.textContent = `${result.total} 个文件`;
     elements.directoryName.textContent = `目录：${result.directory || "—"}`;
-    setWorkflowState("preview");
     setStatus(
       `共 ${result.total} 个文件，${result.readyCount} 个待处理，${result.blockedCount} 个已阻止。`,
       result.readyCount ? "green" : "amber",
@@ -377,7 +369,6 @@ async function executePrepared() {
   state.trackingExecution = true;
   setProgress(0, true);
   setBusy(true);
-  setWorkflowState("running");
   setStatus("正在处理文件，请不要关闭窗口。", "navy", "正在执行");
   try {
     const result = await window.pywebview.api.execute();
@@ -387,7 +378,6 @@ async function executePrepared() {
       state.trackingExecution = false;
       setProgress(0, false);
       setBusy(false);
-      setWorkflowState("preview");
       setStatus(result.message || "未执行任何操作。", "amber", "预览就绪");
     }
   } catch (error) {
@@ -420,7 +410,6 @@ async function undoLast() {
       elements.rootInput.value = result.root;
       updateDirectory(result.root);
     }
-    setWorkflowState("running");
     setStatus("正在恢复上次操作前的文件状态…", "navy", "正在撤销");
   } catch (error) {
     setProgress(0, false);
@@ -506,7 +495,6 @@ window.pathcraftHostEvent = function ({ event, payload = {} } = {}) {
     renderRows(payload.rows);
     elements.fileCount.textContent = `${payload.fileCount} 个文件`;
     elements.directoryName.textContent = `目录：${payload.directory || "—"}`;
-    setWorkflowState("complete");
     const details = payload.detailsCount ? `；详细信息 ${payload.detailsCount} 条已显示` : "";
     setStatus(
       `成功 ${payload.succeeded}，跳过 ${payload.skipped}，失败 ${payload.failed}；当前目录共 ${payload.fileCount} 个文件${details}。`,
@@ -525,7 +513,6 @@ window.pathcraftHostEvent = function ({ event, payload = {} } = {}) {
 function invalidatePreview() {
   const hadPreparedPreview = state.prepared;
   state.prepared = false;
-  setWorkflowState("setup");
   elements.executeLabel.textContent = "执行处理";
   elements.executeButton.disabled = true;
   elements.previewStaleNotice.hidden = !hadPreparedPreview || state.rows.length === 0;
@@ -751,7 +738,6 @@ function setStatus(message, tone, title = null) {
 }
 
 function showError(error) {
-  setWorkflowState("setup");
   setStatus(errorMessage(error), "red", "发生错误");
 }
 

@@ -78,13 +78,20 @@ class PortableBuildTests(unittest.TestCase):
         self.assertIn(".virtual-spacer", style)
         self.assertIn(".text-diff-add", style)
         self.assertIn("grid-template-columns: 232px minmax(0, 1fr)", style)
-        self.assertIn('data-workflow="setup"', html)
         self.assertIn('id="operationMenu"', html)
         self.assertIn('class="action-bar"', html)
         self.assertIn("tbody tr:not(.virtual-spacer) { height: 37px; }", style)
         self.assertIn("min-width: 900px", style)
         self.assertIn('id="operation-title"', html)
         self.assertIn("state.visibleRows.length - 1", script)
+
+        # 已移除的死代码：data-workflow 状态机没有任何 CSS 消费者，
+        # .inline-preview 没有任何元素使用，dropOverlay 的固定
+        # aria-hidden 会让遮罩显示时对辅助技术不可见（hidden 已足够）。
+        self.assertNotIn("data-workflow", html)
+        self.assertNotIn("setWorkflowState", script)
+        self.assertNotIn(".inline-preview", style)
+        self.assertNotIn('class="drop-overlay" hidden aria-hidden', html)
 
     def test_windows_workflow_builds_and_smoke_tests_the_executable(self) -> None:
         workflow = ROOT / ".github" / "workflows" / "windows.yml"
