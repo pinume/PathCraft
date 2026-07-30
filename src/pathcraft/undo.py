@@ -166,12 +166,14 @@ def _undo_pdf(
         staged: list[tuple[Path, Path]] = []
         archive_moved = False
         try:
-            for output, signature in entry.outputs:
+            # 移动只改变文件名/元数据，不会改动内容，因此这里不再对移动后的
+            # 文件重新做内容签名校验：POSIX 上 rename 会刷新 ctime，导致签名
+            # 必然与移动前不同，从而把正常撤销误判为“文件被篡改”。真正的篡改
+            # 检测已经在移动前由 _pdf_undo_problem 完成。
+            for output, _signature in entry.outputs:
                 temporary = _temporary_undo_path(output)
                 move_without_overwrite(output, temporary)
                 staged.append((output, temporary))
-                if not file_matches_content_signature(temporary, signature):
-                    raise OSError(f"输出图片在撤销期间发生变化：{output.name}")
             if not file_matches_content_signature(
                 entry.archive,
                 entry.archive_signature,
@@ -179,11 +181,6 @@ def _undo_pdf(
                 raise OSError("归档 PDF 在撤销期间发生变化")
             move_without_overwrite(entry.archive, entry.source)
             archive_moved = True
-            if not file_matches_content_signature(
-                entry.source,
-                entry.archive_signature,
-            ):
-                raise OSError("归档 PDF 在恢复期间发生变化")
         except OSError as error:
             archive_details = _restore_archive(entry) if archive_moved else []
             restore_details = _restore_staged_outputs(staged)
