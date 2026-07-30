@@ -1,6 +1,6 @@
 [project]
 name = "pathcraft"
-version = "1.3.0"
+version = "1.3.1"
 description = "A safe Windows desktop app for file renaming, mapping tables, and invoice PDF conversion"
 readme = "README.md"
 requires-python = ">=3.10"

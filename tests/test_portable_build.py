@@ -102,6 +102,9 @@ class PortableBuildTests(unittest.TestCase):
         self.assertIn("./build.ps1", content)
         self.assertIn('Start-Process -FilePath "dist\\PathCraft.exe"', content)
         self.assertIn("actions/upload-artifact@", content)
+        self.assertIn("softprops/action-gh-release@", content)
+        self.assertIn("startsWith(github.ref, 'refs/tags/v')", content)
+        self.assertIn("contents: write", content)
 
     def test_installer_is_not_part_of_portable_delivery(self) -> None:
         self.assertFalse((ROOT / "install.ps1").exists())
