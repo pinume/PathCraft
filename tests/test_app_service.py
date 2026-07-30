@@ -89,7 +89,9 @@ class AppServiceTests(unittest.TestCase):
 
     def test_current_files_reflect_completed_rename(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            # Windows 的 TEMP 可能是 8.3 短路径（如 RUNNER~1），而被测函数会
+            # 解析成长路径，因此这里先解析再比较，避免只在 CI 上失败。
+            root = Path(directory).resolve()
             source = root / "photo.jpg"
             source.touch()
             prepared = prepare_rule_rename(root, RenameRule(prefix="new-"))
