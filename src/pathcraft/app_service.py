@@ -56,6 +56,7 @@ class ExecutionSummary:
     failed: int
     details: tuple[str, ...] = ()
     undo: UndoOperation | None = None
+    completed_entries: tuple[PreviewEntry, ...] = ()
 
 
 def validate_root(root: Path) -> Path:
@@ -122,11 +123,12 @@ def execute_operation(
     *,
     dpi: int = DEFAULT_PDF_DPI,
     on_progress: ProgressCallback | None = None,
+    on_page_progress: ProgressCallback | None = None,
 ) -> ExecutionSummary:
     if prepared.kind == "rename":
         return _execute_rename(prepared, on_progress)
     if prepared.kind == "pdf":
-        return _execute_pdf(prepared, dpi, on_progress)
+        return _execute_pdf(prepared, dpi, on_progress, on_page_progress)
     raise ValueError(f"未知操作类型：{prepared.kind}")
 
 
@@ -190,6 +192,10 @@ def _execute_rename(
         failed=len(result.failed),
         details=tuple(details),
         undo=undo,
+        completed_entries=tuple(
+            PreviewEntry(source, destination, "done")
+            for source, destination in result.completed
+        ),
     )
 
 
@@ -197,15 +203,21 @@ def _execute_pdf(
     prepared: PreparedOperation,
     dpi: int,
     on_progress: ProgressCallback | None,
+    on_page_progress: ProgressCallback | None,
 ) -> ExecutionSummary:
     def report(index: int, total: int, path: Path) -> None:
         if on_progress is not None:
             on_progress(index, total, str(path))
 
+    def report_page(index: int, total: int, path: Path) -> None:
+        if on_page_progress is not None:
+            on_page_progress(index, total, str(path))
+
     result = execute_conversion_plans(
         list(prepared.pdf_plans),
         dpi=dpi,
         on_progress=report,
+        on_page_progress=report_page,
     )
     details = [
         f"{source.name}：{message}"
@@ -220,4 +232,8 @@ def _execute_pdf(
         failed=len(result.failed),
         details=tuple(details),
         undo=undo,
+        completed_entries=tuple(
+            PreviewEntry(plan.source, plan.outputs, "done")
+            for plan in result.completed
+        ),
     )

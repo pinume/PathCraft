@@ -31,7 +31,7 @@
 html, body { height: 100%; background: transparent; }
 body {
   margin: 0;
-  min-width: 980px;
+  min-width: 900px;
   color: var(--ink);
   overflow: hidden;
 }

@@ -472,6 +472,17 @@ window.pathcraftHostEvent = function ({ event, payload = {} } = {}) {
     setStatus(`处理中 ${index}/${total}：${String(payload.detail || "")}`, "navy", "正在执行");
     return;
   }
+  if (event === "page-progress") {
+    const index = Number(payload.index);
+    const total = Number(payload.total);
+    if (!Number.isFinite(index) || !Number.isFinite(total) || index < 1 || total < 1) return;
+    setStatus(
+      `正在转换 ${String(payload.detail || "PDF")}：第 ${index}/${total} 页`,
+      "navy",
+      "正在执行",
+    );
+    return;
+  }
   if (event === "error") {
     state.trackingExecution = false;
     setProgress(0, false);
@@ -624,7 +635,10 @@ function renderVirtualRows(force = false) {
   const headerHeight = elements.resultTable.tHead?.offsetHeight || VIRTUAL_ROW_HEIGHT;
   const viewportHeight = Math.max(VIRTUAL_ROW_HEIGHT, elements.tableScroll.clientHeight - headerHeight);
   const bodyScrollTop = Math.max(0, elements.tableScroll.scrollTop - headerHeight);
-  const firstVisible = Math.floor(bodyScrollTop / VIRTUAL_ROW_HEIGHT);
+  const firstVisible = Math.min(
+    Math.floor(bodyScrollTop / VIRTUAL_ROW_HEIGHT),
+    state.visibleRows.length - 1,
+  );
   const start = Math.max(0, firstVisible - VIRTUAL_OVERSCAN);
   const visibleCount = Math.ceil(viewportHeight / VIRTUAL_ROW_HEIGHT);
   const end = Math.min(state.visibleRows.length, firstVisible + visibleCount + VIRTUAL_OVERSCAN);
@@ -637,7 +651,7 @@ function renderVirtualRows(force = false) {
     fragment.append(tableRow(state.visibleRows[index], index));
   }
   const remaining = state.visibleRows.length - end;
-  if (remaining) fragment.append(spacerRow(remaining * VIRTUAL_ROW_HEIGHT));
+  if (remaining > 0) fragment.append(spacerRow(remaining * VIRTUAL_ROW_HEIGHT));
   elements.resultBody.replaceChildren(fragment);
 }
 

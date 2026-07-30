@@ -82,6 +82,19 @@ class PortableBuildTests(unittest.TestCase):
         self.assertIn('id="operationMenu"', html)
         self.assertIn('class="action-bar"', html)
         self.assertIn("tbody tr:not(.virtual-spacer) { height: 37px; }", style)
+        self.assertIn("min-width: 900px", style)
+        self.assertIn('id="operation-title"', html)
+        self.assertIn("state.visibleRows.length - 1", script)
+
+    def test_windows_workflow_builds_and_smoke_tests_the_executable(self) -> None:
+        workflow = ROOT / ".github" / "workflows" / "windows.yml"
+        content = workflow.read_text(encoding="utf-8")
+
+        self.assertIn("windows-latest", content)
+        self.assertIn("python -W error -m unittest discover -v", content)
+        self.assertIn("./build.ps1", content)
+        self.assertIn('Start-Process -FilePath "dist\\PathCraft.exe"', content)
+        self.assertIn("actions/upload-artifact@", content)
 
     def test_installer_is_not_part_of_portable_delivery(self) -> None:
         self.assertFalse((ROOT / "install.ps1").exists())

@@ -72,6 +72,20 @@ class PdfExtractTests(unittest.TestCase):
 
         self.assertEqual(buyer_name, "示例_公司")
 
+    def test_long_buyer_name_is_safely_truncated(self) -> None:
+        words = [
+            (20, 10, 60, 30, "名称："),
+            (62, 10, 290, 30, "😀" * 150),
+        ]
+
+        buyer_name = recognize_buyer_name(FakeDocument([FakePage(words)]))
+
+        self.assertEqual(len(buyer_name), 100)
+        self.assertLessEqual(
+            len(f"{buyer_name}_第999页_999.png".encode("utf-16-le")) // 2,
+            255,
+        )
+
     def test_missing_buyer_label_raises_domain_error(self) -> None:
         with self.assertRaisesRegex(
             BuyerNameRecognitionError,

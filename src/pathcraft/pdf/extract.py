@@ -18,7 +18,7 @@ from ..exceptions import (
 from ..diagnostics import report_exception
 from ..filesystem import FileSignature, file_signature
 from ..scanner import find_files, is_hidden_within
-from ..utils import WINDOWS_RESERVED_NAMES
+from ..utils import WINDOWS_RESERVED_NAMES, truncate_windows_filename
 
 
 INVALID_FILENAME_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
@@ -69,6 +69,8 @@ def find_pdf_files(root: Path, recursive: bool = True) -> list[Path]:
 
 def _safe_filename_stem(value: str) -> str:
     stem = INVALID_FILENAME_CHARS.sub("_", value).strip().rstrip(". ")
+    # Leave room for page numbers, collision suffixes, and the PNG extension.
+    stem = truncate_windows_filename(stem, 200).rstrip(". ")
     if not stem:
         raise BuyerNameRecognitionError("购买方名称为空或无法识别")
     if stem.split(".", 1)[0].rstrip(" .").upper() in WINDOWS_RESERVED_NAMES:

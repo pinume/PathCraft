@@ -194,6 +194,16 @@ class DesktopBridgeTests(unittest.TestCase):
             [1, 3, 4],
         )
 
+    def test_pdf_page_progress_is_forwarded_to_the_ui(self) -> None:
+        bridge = Bridge()
+        with patch.object(bridge, "_push_event") as push:
+            bridge._push_page_progress(2, 5, "invoice.pdf")
+
+        push.assert_called_once_with(
+            "page-progress",
+            {"index": 2, "total": 5, "detail": "invoice.pdf"},
+        )
+
     def test_busy_task_blocks_window_close(self) -> None:
         bridge = Bridge()
         window = Mock()
@@ -247,14 +257,25 @@ class DesktopBridgeTests(unittest.TestCase):
         )
         preview = _serialize_preview(prepared)
         completion = _serialize_completion(
-            ExecutionSummary(1, 0, 0, ("detail",)),
+            ExecutionSummary(
+                1,
+                0,
+                0,
+                ("detail",),
+                completed_entries=(
+                    PreviewEntry(root / "old.txt", root / "new.txt", "done"),
+                ),
+            ),
             root,
             (root / "one.png",),
             "执行完成",
         )
 
         self.assertEqual(preview["rows"][0]["destination"], "one.png，two.png")
-        self.assertEqual(completion["rows"][0]["status"], "issue")
+        self.assertEqual(completion["rows"][0]["status"], "done")
+        self.assertEqual(completion["rows"][0]["source"], "old.txt")
+        self.assertEqual(completion["rows"][0]["destination"], "new.txt")
+        self.assertEqual(completion["rows"][1]["status"], "issue")
         json.dumps(preview)
         json.dumps(completion)
 

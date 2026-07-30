@@ -6,7 +6,9 @@ from pathlib import Path
 import uuid
 
 from .filesystem import (
+    FileContentSignature,
     FileSignature,
+    file_matches_content_signature,
     file_matches_signature,
     file_signature,
     move_without_overwrite,
@@ -22,6 +24,7 @@ class RenameEntry:
     destination: Path
     problem: str | None = None
     source_signature: FileSignature | None = None
+    source_content_signature: FileContentSignature | None = None
 
 
 @dataclass
@@ -93,7 +96,13 @@ def mark_existing_destination_conflicts(
                 queue.append(dependent)
 
     return [
-        RenameEntry(entry.source, entry.destination, problem, entry.source_signature)
+        RenameEntry(
+            entry.source,
+            entry.destination,
+            problem,
+            entry.source_signature,
+            entry.source_content_signature,
+        )
         if index in blocked
         else entry
         for index, entry in enumerate(plan)
@@ -112,7 +121,14 @@ def execute_plan(
 
     for entry in executable:
         if (
-            entry.source_signature is not None
+            entry.source_content_signature is not None
+            and not file_matches_content_signature(
+                entry.source,
+                entry.source_content_signature,
+            )
+        ) or (
+            entry.source_content_signature is None
+            and entry.source_signature is not None
             and not file_matches_signature(entry.source, entry.source_signature)
         ):
             failed.append((entry, "源文件在预览后发生变化，请重新生成预览"))

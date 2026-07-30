@@ -46,6 +46,9 @@ class AppServiceTests(unittest.TestCase):
             summary = execute_operation(prepared)
 
             self.assertEqual((summary.succeeded, summary.skipped, summary.failed), (1, 1, 0))
+            self.assertEqual(len(summary.completed_entries), 1)
+            self.assertEqual(summary.completed_entries[0].source, source)
+            self.assertEqual(summary.completed_entries[0].destination, root / "new-photo.jpg")
             self.assertTrue((root / "new-photo.jpg").exists())
             self.assertTrue(blocked.exists())
             self.assertTrue(conflict.exists())
@@ -156,6 +159,9 @@ class AppServiceTests(unittest.TestCase):
             execution = execute_operation(
                 prepare_rule_rename(root, RenameRule(prefix="new-"))
             )
+            self.assertIsNotNone(
+                execution.undo.rename_entries[0].source_content_signature
+            )
             result = root / "new-photo.jpg"
             result.unlink()
             result.write_text("modified", encoding="utf-8")
@@ -254,6 +260,33 @@ class AppServiceTests(unittest.TestCase):
 
             self.assertEqual((summary.succeeded, summary.skipped, summary.failed), (1, 1, 0))
             self.assertIn("invalid.pdf：无法识别", summary.details)
+            self.assertEqual(summary.completed_entries[0].destination, plan.outputs)
+
+    def test_pdf_execution_forwards_page_progress(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "invoice.pdf"
+            source.touch()
+            module = FakePyMuPDF()
+            plans, failures = build_conversion_plans(root, pymupdf_module=module)
+            prepared = PreparedOperation(
+                "pdf",
+                root,
+                (),
+                pdf_plans=tuple(plans),
+                planning_failures=tuple(failures),
+            )
+            progress = []
+
+            with patch("pathcraft.pdf.render.load_pymupdf", return_value=module):
+                execute_operation(
+                    prepared,
+                    on_page_progress=lambda index, total, path: progress.append(
+                        (index, total, Path(path).name)
+                    ),
+                )
+
+            self.assertEqual(progress, [(1, 1, "invoice.pdf")])
 
     def test_last_pdf_conversion_can_be_undone(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

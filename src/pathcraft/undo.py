@@ -12,7 +12,6 @@ from .filesystem import (
     FileContentSignature,
     file_content_signature,
     file_matches_content_signature,
-    file_signature,
     move_without_overwrite,
     path_exists,
 )
@@ -56,11 +55,17 @@ def prepare_rename_undo(
     details = []
     for original, current in completed:
         try:
-            signature = file_signature(current)
+            signature = file_content_signature(current)
         except OSError as error:
             details.append(f"{current.name}：无法记录撤销信息：{error}")
             continue
-        entries.append(RenameEntry(current, original, source_signature=signature))
+        entries.append(
+            RenameEntry(
+                current,
+                original,
+                source_content_signature=signature,
+            )
+        )
     operation = UndoOperation("rename", root, rename_entries=tuple(entries)) if entries else None
     return operation, tuple(details)
 

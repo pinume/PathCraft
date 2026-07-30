@@ -162,7 +162,11 @@ class Bridge:
             self._busy = True
             self._prepared = None
         self._start_worker(
-            lambda: execute_operation(prepared, on_progress=self._push_progress),
+            lambda: execute_operation(
+                prepared,
+                on_progress=self._push_progress,
+                on_page_progress=self._push_page_progress,
+            ),
             prepared.root,
             "执行完成",
         )
@@ -246,6 +250,12 @@ class Bridge:
             {"index": index, "total": total, "detail": Path(detail).name},
         )
 
+    def _push_page_progress(self, index: int, total: int, detail: str) -> None:
+        self._push_event(
+            "page-progress",
+            {"index": index, "total": total, "detail": Path(detail).name},
+        )
+
     def _push_event(self, event: str, payload: dict[str, object]) -> None:
         window = self._window
         if window is None:
@@ -325,17 +335,10 @@ def _relative_text(path: Path, root: Path) -> str:
 def _serialize_preview(prepared: PreparedOperation) -> dict[str, object]:
     rows: list[dict[str, str]] = []
     for entry in prepared.preview_entries:
-        destination = entry.destination
-        if isinstance(destination, tuple):
-            destination_text = "，".join(path.name for path in destination)
-        elif destination is None:
-            destination_text = ""
-        else:
-            destination_text = destination.name
         rows.append(
             {
                 "source": _relative_text(entry.source, prepared.root),
-                "destination": destination_text,
+                "destination": _destination_text(entry.destination),
                 "status": entry.status,
                 "detail": entry.detail,
             }
@@ -358,9 +361,18 @@ def _serialize_completion(
     action: str,
 ) -> dict[str, object]:
     rows = [
+        {
+            "source": _relative_text(entry.source, root),
+            "destination": _destination_text(entry.destination),
+            "status": "done",
+            "detail": entry.detail,
+        }
+        for entry in summary.completed_entries
+    ]
+    rows.extend(
         {"source": "", "destination": "", "status": "issue", "detail": detail}
         for detail in summary.details
-    ]
+    )
     rows.extend(
         {
             "source": _relative_text(path, root),
@@ -382,6 +394,14 @@ def _serialize_completion(
         "canUndo": summary.undo is not None,
         "rows": rows,
     }
+
+
+def _destination_text(destination: Path | tuple[Path, ...] | None) -> str:
+    if isinstance(destination, tuple):
+        return "，".join(path.name for path in destination)
+    if destination is None:
+        return ""
+    return destination.name
 
 
 def _serialize_current_files(
